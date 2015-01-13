@@ -8,51 +8,52 @@ SWIMM is a software to accelerate Smith-Waterman protein database search on Inte
 Databases must be preprocessed before searching it.
 
 ### Parameters
-* SWIMM execution
+SWIMM execution
 
-  -S &lt;string&gt; 'preprocess' for database preprocessing, 'search' for database search. [REQUIRED]
+      -S <string> 'preprocess' for database preprocessing, 'search' for database search. [REQUIRED]
 
 * preprocess
-
-  -i,   --input=&lt;string&gt; Input sequence filename (must be in FASTA format). [REQUIRED]
+```
+  -i,   --input=<string> Input sequence filename (must be in FASTA format). [REQUIRED]
   
-  -o,   --output=&lt;string&gt; Output filename. [REQUIRED]
+  -o,   --output=<string> Output filename. [REQUIRED]
   
-  -c,   --cpu_threads=&lt;integer&gt; Number of Xeon threads.
-
+  -c,   --cpu_threads=<integer> Number of Xeon threads.
+```
 
 * search
-
-  -q,   --query=&lt;string&gt; Input query sequence filename (must be in FASTA format). [REQUIRED]
+```
+  -q,   --query=<string> Input query sequence filename (must be in FASTA format). [REQUIRED]
   
-  -d,   --db=&lt;string&gt; Preprocessed database output filename. [REQUIRED]
+  -d,   --db=<string> Preprocessed database output filename. [REQUIRED]
   
-  -m,   --execution_mode=&lt;integer&gt; Execution mode: 0 for Xeon only, 1 for Xeon Phi only, 2 for concurrent Xeon and Xeon Phi (default: 2). [REQUIRED]
+  -m,   --execution_mode=<integer> Execution mode: 0 for Xeon only, 1 for Xeon Phi only, 2 for concurrent Xeon and Xeon Phi (default: 2). [REQUIRED]
   
-  -c,   --cpu_threads=&lt;integer&gt; Number of Xeon threads. Valid option only when execution mode is 0 or 2 (default: 4).
+  -c,   --cpu_threads=<integer> Number of Xeon threads. Valid option only when execution mode is 0 or 2 (default: 4).
   
-  -e,   --gap_extend=&lt;integer&gt; Gap extend penalty (default: 2).
+  -e,   --gap_extend=<integer> Gap extend penalty (default: 2).
   
-  -g,   --gap_open=&lt;integer&gt; Gap open penalty (default: 10).
+  -g,   --gap_open=<integer> Gap open penalty (default: 10).
   
-  -k,   --max_chunk_size=&lt;integer&gt; Maximum chunk size in bytes. Valid option only when execution mode is 1 or 2 (default: 134217728).
+  -k,   --max_chunk_size=<integer> Maximum chunk size in bytes. Valid option only when execution mode is 1 or 2 (default: 134217728).
   
-  -p,   --mic_profile=&lt;char&gt; Profile technique in Xeon Phi: ’Q’ for Query Profile, ’S’ for Score Profile, ’A’ for Adaptive Profile (default: A). Score Profile is always used in Xeon.
+  -p,   --mic_profile=<char> Profile technique in Xeon Phi: ’Q’ for Query Profile, ’S’ for Score Profile, ’A’ for Adaptive Profile (default: A). Score Profile is always used in Xeon.
   
-  -r,   --top=&lt;integer&gt; Number of scores to show (default: 10). 
+  -r,   --top=<integer> Number of scores to show (default: 10). 
   
-  -s,   --sm=&lt;string&gt; Substitution matrix. Supported values: blosum45, blosum50, blosum62, blosum80, blosum90, pam30, pam70, pam250 (default: blosum62).
+  -s,   --sm=<string> Substitution matrix. Supported values: blosum45, blosum50, blosum62, blosum80, blosum90, pam30, pam70, pam250 (default: blosum62).
   
-  -t,   --mic_threads=&lt;integer&gt; Number of Xeon Phi threads. Valid option only when execution mode is 1 or 2 (default: 240). 
+  -t,   --mic_threads=<integer> Number of Xeon Phi threads. Valid option only when execution mode is 1 or 2 (default: 240). 
   
-  -u,   --query_length_threshold=&lt;integer&gt; Query length threshold. Valid option only when Adaptive Profile is used (default: 567).
+  -u,   --query_length_threshold=<integer> Query length threshold. Valid option only when Adaptive Profile is used (default: 567).
   
-  -v,   --vector_length=&lt;integer&gt; Vector length: 16 for Xeon Phi, 16 for Xeon with SSE support, 32 for Xeon with AVX2 support (default: 16).
+  -v,   --vector_length=<integer> Vector length: 16 for Xeon Phi, 16 for Xeon with SSE support, 32 for Xeon with AVX2 support (default: 16).
   
-  -x,   --num_mics=&lt;integer&gt; Number of Xeon Phis. Valid option only when execution mode is 1 or 2 (default: 1).
+  -x,   --num_mics=<integer> Number of Xeon Phis. Valid option only when execution mode is 1 or 2 (default: 1).
   
   -?,   --help Give this help list
         --usage Give a short usage message
+```
 
 ### Examples
 
@@ -106,6 +107,7 @@ Databases must be preprocessed before searching it.
   Search query sequence query.fasta against out preprocessed database in concurrent Xeon and Xeon Phi mode with 4 CPU threads and one single accelerator. Divide database in chunks of 67108864 bytes (default 134217728).
   
   `./cudasw --help`
+  
   Print help list.
 
 ### Importante notes
