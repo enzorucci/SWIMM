@@ -59,61 +59,63 @@ SWIMM execution
 
 * Database preprocessing
 
-  `./cudasw -S preprocess -i db.fasta -o out `
+  `./swimm -S preprocess -i db.fasta -o out `
   
   Preprocess db.fasta database using 4 CPU threads. The preprocessed database name will be out.
   
-  `./cudasw -S preprocess -i db.fasta -o out -c 8`
+  `./swimm -S preprocess -i db.fasta -o out -c 8`
   
   Preprocess db.fasta database using 8 CPU threads. The preprocessed database name will be out.
 
 * Database search
 
 
-  `./cudasw -S search -q query.fasta -d out -m 0 `
+  `./swimm -S search -q query.fasta -d out -m 0 `
   
   Search query sequence query.fasta against out preprocessed database in Xeon mode with 4 CPU threads using SSE instruction set.
   
-  `./cudasw -S search -q query.fasta -d out -m 0 -c 16`
+  `./swimm -S search -q query.fasta -d out -m 0 -c 16`
   
   Search query sequence query.fasta against out preprocessed database in Xeon mode with 16 CPU threads using SSE instruction set.
   
-  `./cudasw -S search -q query.fasta -d out -m 0 -c 16 -v 32`
+  `./swimm -S search -q query.fasta -d out -m 0 -c 16 -v 32`
   
   Search query sequence query.fasta against out preprocessed database in Xeon mode with 16 CPU threads using AVX2 instruction set.
   
-  `./cudasw -S search -q query.fasta -d out -m 1`
+  `./swimm -S search -q query.fasta -d out -m 1`
   
   Search query sequence query.fasta against out preprocessed database in Xeon Phi mode using one accelerator with 240 threads.
   
-  `./cudasw -S search -q query.fasta -d out -m 1 -p S`
+  `./swimm -S search -q query.fasta -d out -m 1 -p S`
   
   Search query sequence query.fasta against out preprocessed database in Xeon Phi mode using one accelerator with 240 threads and score profile technique to get substitution matrix values.
   
-  `./cudasw -S search -q query.fasta -d out -m 1 -x 2`
+  `./swimm -S search -q query.fasta -d out -m 1 -x 2`
   
   Search query sequence query.fasta against out preprocessed database in Xeon Phi mode using two accelerators with 240 threads each.
   
-  `./cudasw -S search -q query.fasta -d out -m 1 -x 2 -t 244`
+  `./swimm -S search -q query.fasta -d out -m 1 -x 2 -t 244`
   
   Search query sequence query.fasta against out preprocessed database in Xeon Phi mode using one accelerator with 244 threads each.
   
-  `./cudasw -S search -q query.fasta -d out -m 2 `
+  `./swimm -S search -q query.fasta -d out -m 2 `
   
   Search query sequence query.fasta against out preprocessed database in concurrent Xeon and Xeon Phi mode with 4 CPU threads and one single accelerator.
   
-  `./cudasw -S search -q query.fasta -d out -m 2 -k 67108864`
+  `./swimm -S search -q query.fasta -d out -m 2 -k 67108864`
   
-  Search query sequence query.fasta against out preprocessed database in concurrent Xeon and Xeon Phi mode with 4 CPU threads and one single accelerator. Divide database in chunks of 67108864 bytes (default 134217728).
+  Search query sequence query.fasta against out preprocessed database in concurrent Xeon and Xeon Phi mode with 4 CPU threads and one single accelerator. Divide database in chunks of 67108864 bytes (default: 134217728).
   
-  `./cudasw --help`
+  `./swimm --help`
+  
+  `./swimm -?`
   
   Print help list.
 
 ### Importante notes
 * Database and query files must be in FASTA format.
 * Supported substitution matrixes: BLOSUM45, BLOSUM50, BLOSUM62, BLOSUM80, BLOSUM90, PAM30, PAM70 and PAM250. User-specific substitution matrix will be supported soon.
-* For Xeon Phi, users can choose among query profile, score profile or adaptive profile. Because for shorter queries, query profile is better, we recommend using adaptive profile and tune the query length threshold (default is 567). For Xeon, score profile is always employed.
+* For Xeon Phi, users can choose among query profile, score profile or adaptive profile. Because for shorter queries, query profile is better, we recommend using adaptive profile and tune the query length threshold (default: 567). For Xeon, score profile is always employed.
 * Workload balance is critical in order to achieve good performance. Tune the chunk size with the -k option when using Xeon Phi or concurrent Xeon and Xeon Phi modes.
 
 ## Reference
