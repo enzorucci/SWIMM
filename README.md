@@ -106,7 +106,11 @@ SWIMM execution
   
   `./swimm -S search -q query.fasta -d out -m 2 `
   
-  Search query sequence *query.fasta* against *out* preprocessed database in concurrent Xeon and Xeon Phi mode with 4 CPU threads and one single accelerator.
+  Search query sequence *query.fasta* against *out* preprocessed database in concurrent Xeon and Xeon Phi mode with 4 CPU threads (SSE) and one single accelerator (KNC).
+  
+  `./swimm -S search -q query.fasta -d out -m 2 -v 32`
+  
+  Search query sequence *query.fasta* against *out* preprocessed database in concurrent Xeon and Xeon Phi mode with 4 CPU threads (AVX2) and one single accelerator (KNC).  
   
   `./swimm -S search -q query.fasta -d out -m 2 -k 67108864`
   
