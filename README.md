@@ -34,7 +34,9 @@ SWIMM execution
   -e,   --gap_extend=<integer> Gap extend penalty (default: 2).
   
   -g,   --gap_open=<integer> Gap open penalty (default: 10).
-  
+
+  -b,   --block_size=<integer>  Xeon block size. Valid option when execution mode is 0 or 2 (default: 256).
+
   -k,   --max_chunk_size=<integer> Maximum chunk size in bytes. Valid option only when execution mode is 1 or 2 (default: 134217728).
   
   -p,   --mic_profile=<char> Profile technique in Xeon Phi: ’Q’ for Query Profile, ’S’ for Score Profile, ’A’ for Adaptive Profile (default: A). Score Profile is always used in Xeon.
@@ -116,7 +118,7 @@ SWIMM execution
 * Database and query files must be in FASTA format.
 * Supported substitution matrixes: BLOSUM45, BLOSUM50, BLOSUM62, BLOSUM80, BLOSUM90, PAM30, PAM70 and PAM250. User-specific substitution matrix will be supported soon.
 * For Xeon Phi, users can choose among query profile, score profile or adaptive profile. Because for shorter queries, query profile is better, we recommend using adaptive profile and tune the query length threshold (default: 567). For Xeon, score profile is always employed.
-* Workload balance is critical in order to achieve good performance. Tune the chunk size with the *-k* option when using Xeon Phi or concurrent Xeon and Xeon Phi modes.
+* Workload balance and data locality exploitation are critical to achieve good performance. Tune the chunk size and the Xeon block size with the *-k* and *-b* options, respectively.
 
 ## Reference
 
