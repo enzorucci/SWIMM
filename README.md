@@ -84,6 +84,10 @@ SWIMM execution
   
   Search query sequence *query.fasta* against *out* preprocessed database in Xeon mode with 16 CPU threads using AVX2 instruction set.
   
+    `./swimm -S search -q query.fasta -d out -m 0 -c 16 -b 128`
+  
+  Search query sequence *query.fasta* against *out* preprocessed database in Xeon mode with 16 CPU threads using SSE instruction set and block size equal to 128.
+  
   `./swimm -S search -q query.fasta -d out -m 1`
   
   Search query sequence *query.fasta* against *out* preprocessed database in Xeon Phi mode using one accelerator with 240 threads.
