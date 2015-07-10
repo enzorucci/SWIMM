@@ -2,7 +2,7 @@
 Smith-Waterman implementation for Intel Multicore and Manycore architectures
 
 ## Description
-SWIMM is a software to accelerate Smith-Waterman protein database search on Intel heterogeneous architectures based on Xeon and Xeon Phi processors. SWIMM takes advantage of SIMD computing through the use of SSE and AVX2 extensions on the Xeon and the KNC instruction set on the Xeon Phi. In addition, it offers three execution modes: (1) Xeon, (2) Xeon Phi and (3) concurrent Xeon and Xeon Phi. On a heterogeneous platform based on two Xeon E5-2670 and a single Xeon Phi 3120P, SWIMM reaches up to 160 GCUPS on heterogeneous mode, 117.4 GCUPS for the isolated Xeon and 43.9 GCUPS on Xeon Phi, while searching UniProt/Swiss-Prot database.
+SWIMM is a software to accelerate Smith-Waterman protein database search on Intel heterogeneous architectures based on Xeon and Xeon Phi processors. SWIMM takes advantage of SIMD computing through the use of SSE and AVX2 extensions on the Xeon and the KNC instruction set on the Xeon Phi. In addition, it offers three execution modes: (1) Xeon, (2) Xeon Phi and (3) concurrent Xeon and Xeon Phi. On a heterogeneous platform based on two Xeon E5-2695 v3 and a single Xeon Phi 3120P, SWIMM reaches up to 380 GCUPS on heterogeneous mode (AVX2+KNC), 350 GCUPS for the isolated Xeon (AVX2) and 50 GCUPS on Xeon Phi (KNC), while searching Environmental NR database.
 
 ## Usage
 Databases must be preprocessed before searching it.
@@ -129,8 +129,16 @@ SWIMM execution
 * Workload balance and data locality exploitation are critical to achieve good performance. Tune the chunk size and the Xeon block size with the *-k* and *-b* options, respectively.
 
 ## Reference
+An Energy-aware Performance Analysis of SWIMM: Smith-Waterman Implementation on Intel's Multicore and Manycore architectures
+Enzo Rucci, Carlos García, Guillermo Botella, Armando De Giusti, Marcelo Naiouf and Manuel Prieto-Matías
+Concurrency and Computation: Practice and Experience
+*In press*
 
-*Under evaluation*
+## Changelog
+* July 09, 2015 (v1.0.2)
+Source code released
+* January 11, 2015 (v1.0)
+Binary code released
 
 ## Contact
 If you have any question or suggestion, please contact Enzo Rucci (erucci [at] lidi.info.unlp.edu.ar)
