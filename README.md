@@ -129,9 +129,12 @@ SWIMM execution
 * Workload balance and data locality exploitation are critical to achieve good performance. Tune the chunk size and the Xeon block size with the *-k* and *-b* options, respectively.
 
 ## Reference
-An Energy-aware Performance Analysis of SWIMM: Smith-Waterman Implementation on Intel's Multicore and Manycore architectures
+*An Energy-aware Performance Analysis of SWIMM: Smith-Waterman Implementation on Intel's Multicore and Manycore architectures*
+
 Enzo Rucci, Carlos García, Guillermo Botella, Armando De Giusti, Marcelo Naiouf and Manuel Prieto-Matías
+
 Concurrency and Computation: Practice and Experience
+
 *In press*
 
 ## Changelog
