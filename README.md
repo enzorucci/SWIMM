@@ -130,11 +130,8 @@ SWIMM execution
 
 ## Reference
 *An Energy-aware Performance Analysis of SWIMM: Smith-Waterman Implementation on Intel's Multicore and Manycore architectures*
-
 Enzo Rucci, Carlos García, Guillermo Botella, Armando De Giusti, Marcelo Naiouf and Manuel Prieto-Matías
-
 Concurrency and Computation: Practice and Experience
-
 *In press*
 
 ## Changelog
