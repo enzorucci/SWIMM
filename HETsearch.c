@@ -123,7 +123,7 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 						__declspec(align(64)) __m512i v16 = _mm512_set1_epi32(16), submat_hi, submat_lo, b_values;
 						__mmask16 mask;
 
-						unsigned int tid, i, j, ii, jj, k, disp_1, disp_2, disp_3, disp_4, dim, nbb;
+						unsigned int tid, i, j, ii, jj, k, disp_1, disp_2, disp_3, disp_4, dim1, dim2, nbb;
 						unsigned long int t, s, q; 
 
 						tid = omp_get_thread_num();
@@ -169,18 +169,18 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 
 							for (k=0; k < nbb; k++){
 
-								// calculate dim
+								// calculate dim1
 								disp_1 = k*MIC_KNC_BLOCK_SIZE;
-								dim = (MIC_KNC_BLOCK_SIZE < n[s]-disp_1 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_1);
+								dim1 = (MIC_KNC_BLOCK_SIZE < n[s]-disp_1 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_1);
 
 								// get b block
 								ptr_b_block = ptr_b + disp_1*MIC_KNC_INT32_VECTOR_LENGTH;
 
 								// init buffers
 								#pragma unroll(MIC_KNC_UNROLL_COUNT)
-								for (i=1; i<dim+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
+								for (i=1; i<dim1+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
 								#pragma unroll(MIC_KNC_UNROLL_COUNT)
-								for (i=0; i<dim ; i++ ) row[i] = _mm512_setzero_epi32();
+								for (i=0; i<dim1 ; i++ ) row[i] = _mm512_setzero_epi32();
 								auxLastCol = _mm512_setzero_epi32();
 
 								for( i = 0; i < m[q]; i++){
@@ -195,29 +195,60 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 									submat_lo = _mm512_extload_epi32(queryProfile+disp_1, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 									submat_hi = _mm512_extload_epi32(queryProfile+disp_1+16, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 									#endif
+									// calculate dim2
+									dim2 = dim1 / MIC_KNC_UNROLL_COUNT;
 
-									#pragma unroll(MIC_KNC_UNROLL_COUNT)
-									for(  jj=1; jj < dim+1;  jj++) {
+									for (ii=0; ii<dim2 ; ii++) {
+
+										#pragma unroll(MIC_KNC_UNROLL_COUNT)
+										for( j=ii*MIC_KNC_UNROLL_COUNT+1, jj=0; jj < MIC_KNC_UNROLL_COUNT;  jj++, j++) {
+											//calcuate the diagonal value
+											#if __MIC__
+											b_values = _mm512_extload_epi32(ptr_b_block+(j-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
+											#endif
+											mask = _mm512_cmpge_epi32_mask(b_values,v16);
+											aux1 = _mm512_permutevar_epi32(b_values, submat_lo);
+											aux1 = _mm512_mask_permutevar_epi32(aux1, mask, b_values, submat_hi);
+											current = _mm512_add_epi32(row[j-1], aux1);								
+											// calculate current max value
+											current = _mm512_max_epi32(current, maxRow[i]);
+											current = _mm512_max_epi32(current, maxCol[j]);
+											current = _mm512_max_epi32(current, vzero);
+											// update maxRow and maxCol
+											maxRow[i] = _mm512_sub_epi32(maxRow[i], vextend_gap);
+											maxCol[j] = _mm512_sub_epi32(maxCol[j], vextend_gap);
+											aux1 = _mm512_sub_epi32(current, vopen_extend_gap);
+											maxRow[i] = _mm512_max_epi32(maxRow[i], aux1);
+											maxCol[j] =  _mm512_max_epi32(maxCol[j], aux1);	
+											// update row buffer
+											row[j-1] = previous;
+											previous = current;
+											// update max score
+											score = _mm512_max_epi32(score,current);
+										}
+									}
+									#pragma unroll
+									for( j = dim2*MIC_KNC_UNROLL_COUNT+1; j < dim1+1; j++) {
 										//calcuate the diagonal value
 										#if __MIC__
-										b_values = _mm512_extload_epi32(ptr_b_block+(jj-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
+										b_values = _mm512_extload_epi32(ptr_b_block+(j-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 										#endif
 										mask = _mm512_cmpge_epi32_mask(b_values,v16);
 										aux1 = _mm512_permutevar_epi32(b_values, submat_lo);
 										aux1 = _mm512_mask_permutevar_epi32(aux1, mask, b_values, submat_hi);
-										current = _mm512_add_epi32(row[jj-1], aux1);								
+										current = _mm512_add_epi32(row[j-1], aux1);								
 										// calculate current max value
 										current = _mm512_max_epi32(current, maxRow[i]);
-										current = _mm512_max_epi32(current, maxCol[jj]);
+										current = _mm512_max_epi32(current, maxCol[j]);
 										current = _mm512_max_epi32(current, vzero);
 										// update maxRow and maxCol
 										maxRow[i] = _mm512_sub_epi32(maxRow[i], vextend_gap);
-										maxCol[jj] = _mm512_sub_epi32(maxCol[jj], vextend_gap);
+										maxCol[j] = _mm512_sub_epi32(maxCol[j], vextend_gap);
 										aux1 = _mm512_sub_epi32(current, vopen_extend_gap);
 										maxRow[i] = _mm512_max_epi32(maxRow[i], aux1);
-										maxCol[jj] =  _mm512_max_epi32(maxCol[jj], aux1);	
+										maxCol[j] =  _mm512_max_epi32(maxCol[j], aux1);	
 										// update row buffer
-										row[jj-1] = previous;
+										row[j-1] = previous;
 										previous = current;
 										// update max score
 										score = _mm512_max_epi32(score,current);
@@ -273,15 +304,15 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 
 							for (k=0; k < nbb; k++){
 
-								// calculate dim
+								// calculate dim1
 								disp_2 = k*MIC_KNC_BLOCK_SIZE;
-								dim = (MIC_KNC_BLOCK_SIZE < n[s]-disp_2 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_2);
+								dim1 = (MIC_KNC_BLOCK_SIZE < n[s]-disp_2 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_2);
 
 								// init buffers
 								#pragma unroll(MIC_KNC_UNROLL_COUNT)
-								for (i=1; i<dim+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
+								for (i=1; i<dim1+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
 								#pragma unroll(MIC_KNC_UNROLL_COUNT)
-								for (i=0; i<dim ; i++ ) row[i] = _mm512_setzero_epi32();
+								for (i=0; i<dim1 ; i++ ) row[i] = _mm512_setzero_epi32();
 								auxLastCol = _mm512_setzero_epi32();
 
 								for( i = 0; i < m[q]; i++){
@@ -294,7 +325,7 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 									ptr_scoreProfile = scoreProfile + ((int)(ptr_a[i]))*disp_1 + disp_2*MIC_KNC_INT32_VECTOR_LENGTH;
 
 									#pragma unroll(MIC_KNC_UNROLL_COUNT)
-									for( jj=1; jj < dim+1; jj++) {
+									for( jj=1; jj < dim1+1; jj++) {
 										//calcuate the diagonal value
 										#if __MIC__
 										current = _mm512_add_epi32(row[jj-1], _mm512_extload_epi32(ptr_scoreProfile+(jj-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0));
@@ -349,7 +380,7 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 					__declspec(align(32)) __m128i v127 = _mm_set1_epi8(127), v32767 = _mm_set1_epi16(32767);
 					__declspec(align(32)) __m128i v15 = _mm_set1_epi8(15), v16 = _mm_set1_epi8(16), vneg32 = _mm_set1_epi8(-32);
 
-					unsigned int j, ii, jj, k, disp_1, disp_2, disp_3, disp_4, dim, nbb;
+					unsigned int j, ii, jj, k, disp_1, disp_2, disp_3, disp_4, dim1, dim2, nbb;
 					unsigned long int t, s, q, ss; 
 					int tid, overflow_flag, bb1, bb2, bb1_start, bb2_start, bb1_end, bb2_end;
 
@@ -423,16 +454,16 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 
 							for (k=0; k < nbb; k++){
 
-								// calculate dim
+								// calculate dim1
 								disp_4 = k*cpu_block_size;
-								dim = ptr_chunk_n[s]-disp_4;
-								dim = (cpu_block_size < dim ? cpu_block_size : dim);
+								dim1 = ptr_chunk_n[s]-disp_4;
+								dim1 = (cpu_block_size < dim1 ? cpu_block_size : dim1);
 
 								// init buffers
 								#pragma unroll(CPU_SSE_UNROLL_COUNT)
-								for (i=0; i<dim+1 ; i++ ) maxCol[i] = _mm_set1_epi8(0);
+								for (i=0; i<dim1+1 ; i++ ) maxCol[i] = _mm_set1_epi8(0);
 								#pragma unroll(CPU_SSE_UNROLL_COUNT)
-								for (i=0; i<dim+1 ; i++ ) row[i] = _mm_set1_epi8(0);
+								for (i=0; i<dim1+1 ; i++ ) row[i] = _mm_set1_epi8(0);
 								auxLastCol = _mm_set1_epi8(0);
 
 								for( i = 0; i < m[q]; i++){
@@ -443,25 +474,51 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 									row[0] = lastCol[i];
 									// calculate i displacement
 									ptr_scoreProfile = scoreProfile+((int)(ptr_a[i]))*disp_1 + disp_4*CPU_SSE_INT8_VECTOR_LENGTH;
+									// calculate dim2
+									dim2 = dim1 / CPU_SSE_UNROLL_COUNT;
 
-									#pragma unroll(CPU_SSE_UNROLL_COUNT)
-									for( jj=1; jj < dim+1; jj++) {
+									for (ii=0; ii<dim2 ; ii++) {
+
+										#pragma unroll(CPU_SSE_UNROLL_COUNT)
+										for( j=ii*CPU_SSE_UNROLL_COUNT+1, jj=0; jj < CPU_SSE_UNROLL_COUNT; jj++, j++) {
+											//calcuate the diagonal value
+											current = _mm_adds_epi8(row[j-1], _mm_load_si128((__m128i *) (ptr_scoreProfile+(j-1)*CPU_SSE_INT8_VECTOR_LENGTH)));
+											// calculate current max value
+											current = _mm_max_epi8(current, maxRow[i]);
+											current = _mm_max_epi8(current, maxCol[j]);
+											current = _mm_max_epi8(current, vzero_epi8);
+											// update max score
+											score = _mm_max_epi8(score,current);
+											// update maxRow and maxCol
+											maxRow[i] = _mm_subs_epi8(maxRow[i], vextend_gap_epi8);
+											maxCol[j] = _mm_subs_epi8(maxCol[j], vextend_gap_epi8);
+											aux0 = _mm_subs_epi8(current, vopen_extend_gap_epi8);
+											maxRow[i] = _mm_max_epi8(maxRow[i], aux0);
+											maxCol[j] =  _mm_max_epi8(maxCol[j], aux0);	
+											// update row buffer
+											row[j-1] = previous;
+											previous = current;
+										}
+									}
+
+									#pragma unroll
+									for( j = dim2*CPU_SSE_UNROLL_COUNT+1; j < dim1+1; j++) {
 										//calcuate the diagonal value
-										current = _mm_adds_epi8(row[jj-1], _mm_load_si128((__m128i *) (ptr_scoreProfile+(jj-1)*CPU_SSE_INT8_VECTOR_LENGTH)));
+										current = _mm_adds_epi8(row[j-1], _mm_load_si128((__m128i *) (ptr_scoreProfile+(j-1)*CPU_SSE_INT8_VECTOR_LENGTH)));
 										// calculate current max value
 										current = _mm_max_epi8(current, maxRow[i]);
-										current = _mm_max_epi8(current, maxCol[jj]);
+										current = _mm_max_epi8(current, maxCol[j]);
 										current = _mm_max_epi8(current, vzero_epi8);
 										// update max score
 										score = _mm_max_epi8(score,current);
 										// update maxRow and maxCol
 										maxRow[i] = _mm_subs_epi8(maxRow[i], vextend_gap_epi8);
-										maxCol[jj] = _mm_subs_epi8(maxCol[jj], vextend_gap_epi8);
+										maxCol[j] = _mm_subs_epi8(maxCol[j], vextend_gap_epi8);
 										aux0 = _mm_subs_epi8(current, vopen_extend_gap_epi8);
 										maxRow[i] = _mm_max_epi8(maxRow[i], aux0);
-										maxCol[jj] =  _mm_max_epi8(maxCol[jj], aux0);	
+										maxCol[j] =  _mm_max_epi8(maxCol[j], aux0);	
 										// update row buffer
-										row[jj-1] = previous;
+										row[j-1] = previous;
 										previous = current;
 									}
 									// update lastCol
@@ -506,16 +563,16 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 
 									for (k=0; k < nbb; k++){
 
-										// calculate dim
+										// calculate dim1
 										disp_4 = k*cpu_block_size;
-										dim = ptr_chunk_n[s]-disp_4;
-										dim = (cpu_block_size < dim ? cpu_block_size : dim);
+										dim1 = ptr_chunk_n[s]-disp_4;
+										dim1 = (cpu_block_size < dim1 ? cpu_block_size : dim1);
 
 										// init buffers
 										#pragma unroll(CPU_SSE_UNROLL_COUNT)
-										for (i=0; i<dim+1 ; i++ ) maxCol[i] = _mm_set1_epi16(0);
+										for (i=0; i<dim1+1 ; i++ ) maxCol[i] = _mm_set1_epi16(0);
 										#pragma unroll(CPU_SSE_UNROLL_COUNT)
-										for (i=0; i<dim+1 ; i++ ) row[i] = _mm_set1_epi16(0);
+										for (i=0; i<dim1+1 ; i++ ) row[i] = _mm_set1_epi16(0);
 										auxLastCol = _mm_set1_epi16(0);
 
 										for( i = 0; i < m[q]; i++){
@@ -526,23 +583,48 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 											row[0] = lastCol[i];
 											// calculate i displacement
 											ptr_scoreProfile = scoreProfile+((int)(ptr_a[i]))*disp_1+disp_2+disp_4*CPU_SSE_INT8_VECTOR_LENGTH;
+											// calculate dim2
+											dim2 = dim1 / CPU_SSE_UNROLL_COUNT;
 
-											#pragma unroll(CPU_SSE_UNROLL_COUNT)
-											for(  jj=1; jj < dim+1; jj++) {
+											for (ii=0; ii<dim2 ; ii++) {
+												
+												#pragma unroll(CPU_SSE_UNROLL_COUNT)
+												for( j=ii*CPU_SSE_UNROLL_COUNT+1, jj=0; jj < CPU_SSE_UNROLL_COUNT;  jj++, j++) {
+													//calcuate the diagonal value
+													current = _mm_adds_epi16(row[j-1], _mm_cvtepi8_epi16(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(j-1)*CPU_SSE_INT8_VECTOR_LENGTH))));
+													// calculate current max value
+													current = _mm_max_epi16(current, maxRow[i]);
+													current = _mm_max_epi16(current, maxCol[j]);
+													current = _mm_max_epi16(current, vzero_epi16);
+													// update maxRow and maxCol
+													maxRow[i] = _mm_subs_epi16(maxRow[i], vextend_gap_epi16);
+													maxCol[j] = _mm_subs_epi16(maxCol[j], vextend_gap_epi16);
+													aux0 = _mm_subs_epi16(current, vopen_extend_gap_epi16);
+													maxRow[i] = _mm_max_epi16(maxRow[i], aux0);
+													maxCol[j] =  _mm_max_epi16(maxCol[j], aux0);	
+													// update row buffer
+													row[j-1] = previous;
+													previous = current;
+													// update max score
+													score = _mm_max_epi16(score,current);
+												}
+											}
+											#pragma unroll
+											for( j = dim2*CPU_SSE_UNROLL_COUNT+1; j < dim1+1; j++) {
 												//calcuate the diagonal value
-												current = _mm_adds_epi16(row[jj-1], _mm_cvtepi8_epi16(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(jj-1)*CPU_SSE_INT8_VECTOR_LENGTH))));
+												current = _mm_adds_epi16(row[j-1], _mm_cvtepi8_epi16(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(j-1)*CPU_SSE_INT8_VECTOR_LENGTH))));
 												// calculate current max value
 												current = _mm_max_epi16(current, maxRow[i]);
-												current = _mm_max_epi16(current, maxCol[jj]);
+												current = _mm_max_epi16(current, maxCol[j]);
 												current = _mm_max_epi16(current, vzero_epi16);
 												// update maxRow and maxCol
 												maxRow[i] = _mm_subs_epi16(maxRow[i], vextend_gap_epi16);
-												maxCol[jj] = _mm_subs_epi16(maxCol[jj], vextend_gap_epi16);
+												maxCol[j] = _mm_subs_epi16(maxCol[j], vextend_gap_epi16);
 												aux0 = _mm_subs_epi16(current, vopen_extend_gap_epi16);
 												maxRow[i] = _mm_max_epi16(maxRow[i], aux0);
-												maxCol[jj] =  _mm_max_epi16(maxCol[jj], aux0);	
+												maxCol[j] =  _mm_max_epi16(maxCol[j], aux0);	
 												// update row buffer
-												row[jj-1] = previous;
+												row[j-1] = previous;
 												previous = current;
 												// update max score
 												score = _mm_max_epi16(score,current);
@@ -588,16 +670,16 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 
 											for (k=0; k < nbb; k++){
 
-												// calculate dim
+												// calculate dim1
 												disp_4 = k*cpu_block_size;
-												dim = ptr_chunk_n[s]-disp_4;
-												dim = (cpu_block_size < dim ? cpu_block_size : dim);
+												dim1 = ptr_chunk_n[s]-disp_4;
+												dim1 = (cpu_block_size < dim1 ? cpu_block_size : dim1);
 
 												// init buffers
 												#pragma unroll(CPU_SSE_UNROLL_COUNT)
-												for (i=0; i<dim+1 ; i++ ) maxCol[i] = _mm_set1_epi32(0);
+												for (i=0; i<dim1+1 ; i++ ) maxCol[i] = _mm_set1_epi32(0);
 												#pragma unroll(CPU_SSE_UNROLL_COUNT)
-												for (i=0; i<dim+1 ; i++ ) row[i] = _mm_set1_epi32(0);
+												for (i=0; i<dim1+1 ; i++ ) row[i] = _mm_set1_epi32(0);
 												auxLastCol = _mm_set1_epi32(0);
 
 												for( i = 0; i < m[q]; i++){
@@ -608,23 +690,48 @@ void het_search_sse_sp_knc_ap (char * query_sequences, unsigned short int * quer
 													row[0] = lastCol[i];
 													// calculate i displacement
 													ptr_scoreProfile = scoreProfile+((int)(ptr_a[i]))*disp_1+disp_3+disp_4*CPU_SSE_INT8_VECTOR_LENGTH;
+													// calculate dim2
+													dim2 = dim1 / CPU_SSE_UNROLL_COUNT;
 
-													#pragma unroll(CPU_SSE_UNROLL_COUNT)
-													for( jj=1; jj < dim+1;  jj++) {
+													for (ii=0; ii<dim2 ; ii++) {
+
+														#pragma unroll(CPU_SSE_UNROLL_COUNT)
+														for( j=ii*CPU_SSE_UNROLL_COUNT+1, jj=0; jj < CPU_SSE_UNROLL_COUNT;  jj++, j++) {
+															//calcuate the diagonal value
+															current = _mm_add_epi32(row[j-1], _mm_cvtepi8_epi32(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(j-1)*CPU_SSE_INT8_VECTOR_LENGTH))));
+															// calculate current max value
+															current = _mm_max_epi32(current, maxRow[i]);
+															current = _mm_max_epi32(current, maxCol[j]);
+															current = _mm_max_epi32(current, vzero_epi32);
+															// update maxRow and maxCol
+															maxRow[i] = _mm_sub_epi32(maxRow[i], vextend_gap_epi32);
+															maxCol[j] = _mm_sub_epi32(maxCol[j], vextend_gap_epi32);
+															aux0 = _mm_sub_epi32(current, vopen_extend_gap_epi32);
+															maxRow[i] = _mm_max_epi32(maxRow[i], aux0);
+															maxCol[j] =  _mm_max_epi32(maxCol[j], aux0);	
+															// update row buffer
+															row[j-1] = previous;
+															previous = current;
+															// update max score
+															score = _mm_max_epi32(score,current);
+														}
+													}
+													#pragma unroll
+													for( j = dim2*CPU_SSE_UNROLL_COUNT+1; j < dim1+1; j++) {
 														//calcuate the diagonal value
-														current = _mm_add_epi32(row[jj-1], _mm_cvtepi8_epi32(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(jj-1)*CPU_SSE_INT8_VECTOR_LENGTH))));
+														current = _mm_add_epi32(row[j-1], _mm_cvtepi8_epi32(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(j-1)*CPU_SSE_INT8_VECTOR_LENGTH))));
 														// calculate current max value
 														current = _mm_max_epi32(current, maxRow[i]);
-														current = _mm_max_epi32(current, maxCol[jj]);
+														current = _mm_max_epi32(current, maxCol[j]);
 														current = _mm_max_epi32(current, vzero_epi32);
 														// update maxRow and maxCol
 														maxRow[i] = _mm_sub_epi32(maxRow[i], vextend_gap_epi32);
-														maxCol[jj] = _mm_sub_epi32(maxCol[jj], vextend_gap_epi32);
+														maxCol[j] = _mm_sub_epi32(maxCol[j], vextend_gap_epi32);
 														aux0 = _mm_sub_epi32(current, vopen_extend_gap_epi32);
 														maxRow[i] = _mm_max_epi32(maxRow[i], aux0);
-														maxCol[jj] =  _mm_max_epi32(maxCol[jj], aux0);	
+														maxCol[j] =  _mm_max_epi32(maxCol[j], aux0);	
 														// update row buffer
-														row[jj-1] = previous;
+														row[j-1] = previous;
 														previous = current;
 														// update max score
 														score = _mm_max_epi32(score,current);
@@ -806,7 +913,7 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 						__declspec(align(64)) __m512i v16 = _mm512_set1_epi32(16), submat_hi, submat_lo, b_values;
 						__mmask16 mask;
 
-						unsigned int tid, i, j, ii, jj, k, disp_1, disp_2, disp_3, dim, nbb, offset;
+						unsigned int tid, i, j, ii, jj, k, disp_1, disp_2, disp_3, dim1, dim2, nbb, offset;
 						unsigned long int t, tt, s, q; 
 
 						tid = omp_get_thread_num();
@@ -854,18 +961,18 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 
 								for (k=0; k < nbb; k++){
 
-									// calculate dim
+									// calculate dim1
 									disp_1 = k*MIC_KNC_BLOCK_SIZE;
-									dim = (MIC_KNC_BLOCK_SIZE < n[s]-disp_1 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_1);
+									dim1 = (MIC_KNC_BLOCK_SIZE < n[s]-disp_1 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_1);
 
 									// get b block
 									ptr_b_block = ptr_b + disp_1*CPU_AVX2_INT8_VECTOR_LENGTH;
 
 									// init buffers
 									#pragma unroll(MIC_KNC_UNROLL_COUNT)
-									for (i=1; i<dim+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
+									for (i=1; i<dim1+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
 									#pragma unroll(MIC_KNC_UNROLL_COUNT)
-									for (i=0; i<dim ; i++ ) row[i] = _mm512_setzero_epi32();
+									for (i=0; i<dim1 ; i++ ) row[i] = _mm512_setzero_epi32();
 									auxLastCol = _mm512_setzero_epi32();
 
 									for( i =0; i < m[q]; i++){
@@ -880,33 +987,65 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 										submat_lo = _mm512_extload_epi32(queryProfile+disp_1, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 										submat_hi = _mm512_extload_epi32(queryProfile+disp_1+16, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 										#endif
+										// calculate dim2
+										dim2 = dim1 / MIC_KNC_UNROLL_COUNT;
 
-										#pragma unroll(MIC_KNC_UNROLL_COUNT)
-										for( jj=1; jj < dim+1; jj++) {
+										for (ii=0; ii<dim2 ; ii++) {
+
+											#pragma unroll(MIC_KNC_UNROLL_COUNT)
+											for( j=ii*MIC_KNC_UNROLL_COUNT+1, jj=0; jj < MIC_KNC_UNROLL_COUNT;  jj++, j++) {
+												//calcuate the diagonal value
+												#if __MIC__
+												b_values = _mm512_extload_epi32(ptr_b_block+(j-1)*CPU_AVX2_INT8_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
+												#endif
+												mask = _mm512_cmpge_epi32_mask(b_values,v16);
+												aux1 = _mm512_permutevar_epi32(b_values, submat_lo);
+												aux1 = _mm512_mask_permutevar_epi32(aux1, mask, b_values, submat_hi);
+												current = _mm512_add_epi32(row[j-1], aux1);								
+												// calculate current max value
+												current = _mm512_max_epi32(current, maxRow[i]);
+												current = _mm512_max_epi32(current, maxCol[j]);
+												current = _mm512_max_epi32(current, vzero);
+												// update maxRow and maxCol
+												maxRow[i] = _mm512_sub_epi32(maxRow[i], vextend_gap);
+												maxCol[j] = _mm512_sub_epi32(maxCol[j], vextend_gap);
+												aux1 = _mm512_sub_epi32(current, vopen_extend_gap);
+												maxRow[i] = _mm512_max_epi32(maxRow[i], aux1);
+												maxCol[j] =  _mm512_max_epi32(maxCol[j], aux1);	
+												// update row buffer
+												row[j-1] = previous;
+												previous = current;
+												// update max score
+												score = _mm512_max_epi32(score,current);
+											}
+										}
+										#pragma unroll
+										for( j = dim2*MIC_KNC_UNROLL_COUNT+1; j < dim1+1; j++) {
 											//calcuate the diagonal value
 											#if __MIC__
-											b_values = _mm512_extload_epi32(ptr_b_block+(jj-1)*CPU_AVX2_INT8_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
+											b_values = _mm512_extload_epi32(ptr_b_block+(j-1)*CPU_AVX2_INT8_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 											#endif
 											mask = _mm512_cmpge_epi32_mask(b_values,v16);
 											aux1 = _mm512_permutevar_epi32(b_values, submat_lo);
 											aux1 = _mm512_mask_permutevar_epi32(aux1, mask, b_values, submat_hi);
-											current = _mm512_add_epi32(row[jj-1], aux1);								
+											current = _mm512_add_epi32(row[j-1], aux1);								
 											// calculate current max value
 											current = _mm512_max_epi32(current, maxRow[i]);
-											current = _mm512_max_epi32(current, maxCol[jj]);
+											current = _mm512_max_epi32(current, maxCol[j]);
 											current = _mm512_max_epi32(current, vzero);
 											// update maxRow and maxCol
 											maxRow[i] = _mm512_sub_epi32(maxRow[i], vextend_gap);
-											maxCol[jj] = _mm512_sub_epi32(maxCol[jj], vextend_gap);
+											maxCol[j] = _mm512_sub_epi32(maxCol[j], vextend_gap);
 											aux1 = _mm512_sub_epi32(current, vopen_extend_gap);
 											maxRow[i] = _mm512_max_epi32(maxRow[i], aux1);
-											maxCol[jj] =  _mm512_max_epi32(maxCol[jj], aux1);	
+											maxCol[j] =  _mm512_max_epi32(maxCol[j], aux1);	
 											// update row buffer
-											row[jj-1] = previous;
+											row[j-1] = previous;
 											previous = current;
 											// update max score
 											score = _mm512_max_epi32(score,current);
 										}
+
 										// update lastCol
 										lastCol[i] = auxLastCol;
 										auxLastCol = current;
@@ -961,15 +1100,15 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 
 								for (k=0; k < nbb; k++){
 
-									// calculate dim
+									// calculate dim1
 									disp_2 = k*MIC_KNC_BLOCK_SIZE;
-									dim = (MIC_KNC_BLOCK_SIZE < n[s]-disp_2 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_2);
+									dim1 = (MIC_KNC_BLOCK_SIZE < n[s]-disp_2 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_2);
 
 									// init buffers
 									#pragma unroll(MIC_KNC_UNROLL_COUNT)
-									for (i=1; i<dim+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
+									for (i=1; i<dim1+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
 									#pragma unroll(MIC_KNC_UNROLL_COUNT)
-									for (i=0; i<dim ; i++ ) row[i] = _mm512_setzero_epi32();
+									for (i=0; i<dim1 ; i++ ) row[i] = _mm512_setzero_epi32();
 									auxLastCol = _mm512_setzero_epi32();
 
 									for( i = 0; i < m[q]; i++){
@@ -982,7 +1121,7 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 										ptr_scoreProfile = scoreProfile + ((int)(ptr_a[i]))*disp_1 + disp_2*MIC_KNC_INT32_VECTOR_LENGTH;
 
 										#pragma unroll(MIC_KNC_UNROLL_COUNT)
-										for( j=(k*MIC_KNC_BLOCK_SIZE)+1, jj=1; jj < dim+1; j++, jj++) {
+										for( j=(k*MIC_KNC_BLOCK_SIZE)+1, jj=1; jj < dim1+1; j++, jj++) {
 											//calcuate the diagonal value
 											#if __MIC__
 											current = _mm512_add_epi32(row[jj-1], _mm512_extload_epi32(ptr_scoreProfile+(jj-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0));
@@ -1042,7 +1181,7 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 					__declspec(align(32)) __m256i v127 = _mm256_set1_epi8(127), v32767 = _mm256_set1_epi16(32767);
 					__declspec(align(32)) __m128i aux, auxBlosum[2];
 
-					unsigned int i, j, ii, jj, k, disp_1, disp_2, disp_3, disp_4, dim, nbb;
+					unsigned int i, j, ii, jj, k, disp_1, disp_2, disp_3, disp_4, dim1, dim2, nbb;
 					unsigned long int t, s, q; 
 					int tid, overflow_flag, bb1, bb2, bb1_start, bb1_end, bb2_start, bb2_end;
 
@@ -1118,16 +1257,16 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 
 							for (k=0; k < nbb; k++){
 
-								// calculate dim
+								// calculate dim1
 								disp_4 = k*cpu_block_size;
-								dim = ptr_chunk_n[s]-disp_4;
-								dim = (cpu_block_size < dim ? cpu_block_size : dim);
+								dim1 = ptr_chunk_n[s]-disp_4;
+								dim1 = (cpu_block_size < dim1 ? cpu_block_size : dim1);
 
 								// init buffers
 								#pragma unroll(CPU_AVX2_UNROLL_COUNT)
-								for (i=0; i<dim+1 ; i++ ) maxCol[i] = _mm256_set1_epi8(0);
+								for (i=0; i<dim1+1 ; i++ ) maxCol[i] = _mm256_set1_epi8(0);
 								#pragma unroll(CPU_AVX2_UNROLL_COUNT)
-								for (i=0; i<dim+1 ; i++ ) row[i] = _mm256_set1_epi8(0);
+								for (i=0; i<dim1+1 ; i++ ) row[i] = _mm256_set1_epi8(0);
 								auxLastCol = _mm256_set1_epi8(0);
 
 								for( i = 0; i < m[q]; i++){
@@ -1138,23 +1277,48 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 									row[0] = lastCol[i];
 									// calculate score profile displacement
 									ptr_scoreProfile = scoreProfile+((unsigned int)(ptr_a[i]))*disp_1 + disp_4*CPU_AVX2_INT8_VECTOR_LENGTH;
+									// calculate dim2
+									dim2 = dim1 / CPU_AVX2_UNROLL_COUNT;
 
-									#pragma unroll(CPU_AVX2_UNROLL_COUNT)
-									for( jj=1; jj < dim+1; jj++) {
+									for (ii=0; ii<dim2 ; ii++) {
+
+										#pragma unroll(CPU_AVX2_UNROLL_COUNT)
+										for( j=ii*CPU_AVX2_UNROLL_COUNT+1, jj=0; jj < CPU_AVX2_UNROLL_COUNT;  jj++, j++) {
+											//calcuate the diagonal value
+											current =  _mm256_adds_epi8(row[j-1], _mm256_load_si256((__m256i *) (ptr_scoreProfile+(j-1)*CPU_AVX2_INT8_VECTOR_LENGTH)));
+											// calculate current max value
+											current = _mm256_max_epi8(current, maxRow[i]);
+											current = _mm256_max_epi8(current, maxCol[j]);
+											current = _mm256_max_epi8(current, vzero_epi8);
+											// update maxRow and maxCol
+											maxRow[i] =  _mm256_subs_epi8(maxRow[i], vextend_gap_epi8);
+											maxCol[j] = _mm256_subs_epi8(maxCol[j], vextend_gap_epi8);
+											aux0 =  _mm256_subs_epi8(current, vopen_extend_gap_epi8);
+											maxRow[i] = _mm256_max_epi8(maxRow[i], aux0);
+											maxCol[j] =  _mm256_max_epi8(maxCol[j], aux0);	
+											// update row buffer
+											row[j-1] = previous;
+											previous = current;
+											// update max score
+											score = _mm256_max_epi8(score,current);
+										}
+									}
+									#pragma unroll
+									for( j = dim2*CPU_AVX2_UNROLL_COUNT+1; j < dim1+1; j++) {
 										//calcuate the diagonal value
-										current =  _mm256_adds_epi8(row[jj-1], _mm256_load_si256((__m256i *) (ptr_scoreProfile+(jj-1)*CPU_AVX2_INT8_VECTOR_LENGTH)));
+										current =  _mm256_adds_epi8(row[j-1], _mm256_load_si256((__m256i *) (ptr_scoreProfile+(j-1)*CPU_AVX2_INT8_VECTOR_LENGTH)));
 										// calculate current max value
 										current = _mm256_max_epi8(current, maxRow[i]);
-										current = _mm256_max_epi8(current, maxCol[jj]);
+										current = _mm256_max_epi8(current, maxCol[j]);
 										current = _mm256_max_epi8(current, vzero_epi8);
 										// update maxRow and maxCol
 										maxRow[i] =  _mm256_subs_epi8(maxRow[i], vextend_gap_epi8);
-										maxCol[jj] = _mm256_subs_epi8(maxCol[jj], vextend_gap_epi8);
+										maxCol[j] = _mm256_subs_epi8(maxCol[j], vextend_gap_epi8);
 										aux0 =  _mm256_subs_epi8(current, vopen_extend_gap_epi8);
 										maxRow[i] = _mm256_max_epi8(maxRow[i], aux0);
-										maxCol[jj] =  _mm256_max_epi8(maxCol[jj], aux0);	
+										maxCol[j] =  _mm256_max_epi8(maxCol[j], aux0);	
 										// update row buffer
-										row[jj-1] = previous;
+										row[j-1] = previous;
 										previous = current;
 										// update max score
 										score = _mm256_max_epi8(score,current);
@@ -1203,16 +1367,16 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 
 									for (k=0; k < nbb; k++){
 
-										// calculate dim
+										// calculate dim1
 										disp_4 = k*cpu_block_size;
-										dim = ptr_chunk_n[s]-disp_4;
-										dim = (cpu_block_size < dim ? cpu_block_size : dim);
+										dim1 = ptr_chunk_n[s]-disp_4;
+										dim1 = (cpu_block_size < dim1 ? cpu_block_size : dim1);
 
 										// init buffers
 										#pragma unroll(CPU_AVX2_UNROLL_COUNT)
-										for (i=0; i<dim+1 ; i++ ) maxCol[i] = _mm256_set1_epi16(0);
+										for (i=0; i<dim1+1 ; i++ ) maxCol[i] = _mm256_set1_epi16(0);
 										#pragma unroll(CPU_AVX2_UNROLL_COUNT)
-										for (i=0; i<dim+1 ; i++ ) row[i] = _mm256_set1_epi16(0);
+										for (i=0; i<dim1+1 ; i++ ) row[i] = _mm256_set1_epi16(0);
 										auxLastCol = _mm256_set1_epi16(0);
 
 										for( i = 0; i < m[q]; i++){
@@ -1223,23 +1387,48 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 											row[0] = lastCol[i];
 											// calculate score profile displacement
 											ptr_scoreProfile = scoreProfile+((int)(ptr_a[i]))*disp_1+disp_2+disp_4*CPU_AVX2_INT8_VECTOR_LENGTH;
+											// calculate dim2
+											dim2 = dim1 / CPU_AVX2_UNROLL_COUNT;
 
-											#pragma unroll(CPU_AVX2_UNROLL_COUNT)
-											for(  jj=1; jj < dim+1; jj++) {
+											for (ii=0; ii<dim2 ; ii++) {
+
+												#pragma unroll(CPU_AVX2_UNROLL_COUNT)
+												for( j=ii*CPU_AVX2_UNROLL_COUNT+1, jj=0; jj < CPU_AVX2_UNROLL_COUNT;  jj++, j++) {
+													//calcuate the diagonal value
+													current = _mm256_adds_epi16(row[j-1], _mm256_cvtepi8_epi16(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(j-1)*CPU_AVX2_INT8_VECTOR_LENGTH))));
+													// calculate current max value
+													current = _mm256_max_epi16(current, maxRow[i]);
+													current = _mm256_max_epi16(current, maxCol[j]);
+													current = _mm256_max_epi16(current, vzero_epi16);
+													// update maxRow and maxCol
+													maxRow[i] = _mm256_subs_epi16(maxRow[i], vextend_gap_epi16);
+													maxCol[j] = _mm256_subs_epi16(maxCol[j], vextend_gap_epi16);
+													aux0 = _mm256_subs_epi16(current, vopen_extend_gap_epi16);
+													maxRow[i] = _mm256_max_epi16(maxRow[i], aux0);
+													maxCol[j] =  _mm256_max_epi16(maxCol[j], aux0);	
+													// update row buffer
+													row[j-1] = previous;
+													previous = current;
+													// update max score
+													score = _mm256_max_epi16(score,current);
+												}
+											}
+											#pragma unroll
+											for( j = dim2*CPU_AVX2_UNROLL_COUNT+1; j < dim1+1; j++) {
 												//calcuate the diagonal value
-												current = _mm256_adds_epi16(row[jj-1], _mm256_cvtepi8_epi16(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(jj-1)*CPU_AVX2_INT8_VECTOR_LENGTH))));
+												current = _mm256_adds_epi16(row[j-1], _mm256_cvtepi8_epi16(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(j-1)*CPU_AVX2_INT8_VECTOR_LENGTH))));
 												// calculate current max value
 												current = _mm256_max_epi16(current, maxRow[i]);
-												current = _mm256_max_epi16(current, maxCol[jj]);
+												current = _mm256_max_epi16(current, maxCol[j]);
 												current = _mm256_max_epi16(current, vzero_epi16);
 												// update maxRow and maxCol
 												maxRow[i] = _mm256_subs_epi16(maxRow[i], vextend_gap_epi16);
-												maxCol[jj] = _mm256_subs_epi16(maxCol[jj], vextend_gap_epi16);
+												maxCol[j] = _mm256_subs_epi16(maxCol[j], vextend_gap_epi16);
 												aux0 = _mm256_subs_epi16(current, vopen_extend_gap_epi16);
 												maxRow[i] = _mm256_max_epi16(maxRow[i], aux0);
-												maxCol[jj] =  _mm256_max_epi16(maxCol[jj], aux0);	
+												maxCol[j] =  _mm256_max_epi16(maxCol[j], aux0);	
 												// update row buffer
-												row[jj-1] = previous;
+												row[j-1] = previous;
 												previous = current;
 												// update max score
 												score = _mm256_max_epi16(score,current);
@@ -1287,16 +1476,16 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 
 											for (k=0; k < nbb; k++){
 
-												// calculate dim
+												// calculate dim1
 												disp_4 = k*cpu_block_size;
-												dim = ptr_chunk_n[s]-disp_4;
-												dim = (cpu_block_size < dim ? cpu_block_size : dim);
+												dim1 = ptr_chunk_n[s]-disp_4;
+												dim1 = (cpu_block_size < dim1 ? cpu_block_size : dim1);
 
 												// init buffers
 												#pragma unroll(CPU_AVX2_UNROLL_COUNT)
-												for (i=0; i<dim+1 ; i++ ) maxCol[i] = _mm256_set1_epi32(0);
+												for (i=0; i<dim1+1 ; i++ ) maxCol[i] = _mm256_set1_epi32(0);
 												#pragma unroll(CPU_AVX2_UNROLL_COUNT)
-												for (i=0; i<dim+1 ; i++ ) row[i] = _mm256_set1_epi32(0);
+												for (i=0; i<dim1+1 ; i++ ) row[i] = _mm256_set1_epi32(0);
 												auxLastCol = _mm256_set1_epi32(0);
 
 												for( i = 0; i < m[q]; i++){
@@ -1307,23 +1496,48 @@ void het_search_avx2_sp_knc_ap (char * query_sequences, unsigned short int * que
 													row[0] = lastCol[i];
 													// calculate score profile displacement
 													ptr_scoreProfile = scoreProfile+((unsigned int)(ptr_a[i]))*disp_1+disp_3+disp_4*CPU_AVX2_INT8_VECTOR_LENGTH;
+													// calculate dim2
+													dim2 = dim1 / CPU_AVX2_UNROLL_COUNT;
 
-													#pragma unroll(CPU_AVX2_UNROLL_COUNT)
-													for(  jj=1; jj < dim+1; jj++) {
+													for (ii=0; ii<dim2 ; ii++) {
+
+														#pragma unroll(CPU_AVX2_UNROLL_COUNT)
+														for( j=ii*CPU_AVX2_UNROLL_COUNT+1, jj=0; jj < CPU_AVX2_UNROLL_COUNT;  jj++, j++) {
+															//calcuate the diagonal value
+															current = _mm256_add_epi32(row[j-1], _mm256_cvtepi8_epi32(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(j-1)*CPU_AVX2_INT8_VECTOR_LENGTH))));
+															// calculate current max value
+															current = _mm256_max_epi32(current, maxRow[i]);
+															current = _mm256_max_epi32(current, maxCol[j]);
+															current = _mm256_max_epi32(current, vzero_epi32);
+															// update maxRow and maxCol
+															maxRow[i] = _mm256_sub_epi32(maxRow[i], vextend_gap_epi32);
+															maxCol[j] = _mm256_sub_epi32(maxCol[j], vextend_gap_epi32);
+															aux0 = _mm256_sub_epi32(current, vopen_extend_gap_epi32);
+															maxRow[i] = _mm256_max_epi32(maxRow[i], aux0);
+															maxCol[j] =  _mm256_max_epi32(maxCol[j], aux0);	
+															// update row buffer
+															row[j-1] = previous;
+															previous = current;
+															// update max score
+															score = _mm256_max_epi32(score,current);
+														}
+													}
+													#pragma unroll
+													for( j = dim2*CPU_AVX2_UNROLL_COUNT+1; j < dim1+1; j++) {
 														//calcuate the diagonal value
-														current = _mm256_add_epi32(row[jj-1], _mm256_cvtepi8_epi32(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(jj-1)*CPU_AVX2_INT8_VECTOR_LENGTH))));
+														current = _mm256_add_epi32(row[j-1], _mm256_cvtepi8_epi32(_mm_loadu_si128((__m128i *) (ptr_scoreProfile+(j-1)*CPU_AVX2_INT8_VECTOR_LENGTH))));
 														// calculate current max value
 														current = _mm256_max_epi32(current, maxRow[i]);
-														current = _mm256_max_epi32(current, maxCol[jj]);
+														current = _mm256_max_epi32(current, maxCol[j]);
 														current = _mm256_max_epi32(current, vzero_epi32);
 														// update maxRow and maxCol
 														maxRow[i] = _mm256_sub_epi32(maxRow[i], vextend_gap_epi32);
-														maxCol[jj] = _mm256_sub_epi32(maxCol[jj], vextend_gap_epi32);
+														maxCol[j] = _mm256_sub_epi32(maxCol[j], vextend_gap_epi32);
 														aux0 = _mm256_sub_epi32(current, vopen_extend_gap_epi32);
 														maxRow[i] = _mm256_max_epi32(maxRow[i], aux0);
-														maxCol[jj] =  _mm256_max_epi32(maxCol[jj], aux0);	
+														maxCol[j] =  _mm256_max_epi32(maxCol[j], aux0);	
 														// update row buffer
-														row[jj-1] = previous;
+														row[j-1] = previous;
 														previous = current;
 														// update max score
 														score = _mm256_max_epi32(score,current);

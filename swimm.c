@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
 	else {
 		/* Database search */
 		// Print database search information
-		printf("\nSWIMM v1.0.2 \n\n");
+		printf("\nSWIMM v1.0.3 \n\n");
 		printf("Database file:\t\t\t%s\n",sequences_filename);
 
 		// Load query sequence from file in a

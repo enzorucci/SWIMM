@@ -100,7 +100,7 @@ void mic_search_knc_ap_multiple_chunks (char * query_sequences, unsigned short i
 					__declspec(align(64)) __m512i v16 = _mm512_set1_epi32(16), submat_hi, submat_lo, b_values;
 					__mmask16 mask;
 
-					unsigned int tid, i, j, ii, jj, k, disp_1, disp_2, disp_3, dim, nbb;
+					unsigned int tid, i, j, ii, jj, k, disp_1, disp_2, disp_3, dim1, dim2, nbb;
 					unsigned long int t, s, q; 
 
 					tid = omp_get_thread_num();
@@ -146,18 +146,18 @@ void mic_search_knc_ap_multiple_chunks (char * query_sequences, unsigned short i
 
 						for (k=0; k < nbb; k++){
 
-							// calculate dim
+							// calculate dim1
 							disp_1 = k*MIC_KNC_BLOCK_SIZE;
-							dim = (MIC_KNC_BLOCK_SIZE < n[s]-disp_1 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_1);
+							dim1 = (MIC_KNC_BLOCK_SIZE < n[s]-disp_1 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_1);
 
 							// get b block
 							ptr_b_block = ptr_b + disp_1*MIC_KNC_INT32_VECTOR_LENGTH;
 
 							// init buffers
 							#pragma unroll(MIC_KNC_UNROLL_COUNT)
-							for (i=1; i<dim+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
+							for (i=1; i<dim1+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
 							#pragma unroll(MIC_KNC_UNROLL_COUNT)
-							for (i=0; i<dim ; i++ ) row[i] = _mm512_setzero_epi32();
+							for (i=0; i<dim1 ; i++ ) row[i] = _mm512_setzero_epi32();
 							auxLastCol = _mm512_setzero_epi32();
 
 							for( i = 0; i < m[q]; i++){
@@ -172,29 +172,60 @@ void mic_search_knc_ap_multiple_chunks (char * query_sequences, unsigned short i
 								submat_lo = _mm512_extload_epi32(queryProfile+disp_1, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 								submat_hi = _mm512_extload_epi32(queryProfile+disp_1+16, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 								#endif
+								// calculate dim2
+								dim2 = dim1 / MIC_KNC_UNROLL_COUNT;
 
-								#pragma unroll(MIC_KNC_UNROLL_COUNT)
-								for( jj=1; jj < dim+1;  jj++) {
+								for (ii=0; ii<dim2 ; ii++) {
+
+									#pragma unroll(MIC_KNC_UNROLL_COUNT)
+									for( j=ii*MIC_KNC_UNROLL_COUNT+1, jj=0; jj < MIC_KNC_UNROLL_COUNT;  jj++, j++) {
+										//calcuate the diagonal value
+										#if __MIC__
+										b_values = _mm512_extload_epi32(ptr_b_block+(j-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
+										#endif
+										mask = _mm512_cmpge_epi32_mask(b_values,v16);
+										aux1 = _mm512_permutevar_epi32(b_values, submat_lo);
+										aux1 = _mm512_mask_permutevar_epi32(aux1, mask, b_values, submat_hi);
+										current = _mm512_add_epi32(row[j-1], aux1);								
+										// calculate current max value
+										current = _mm512_max_epi32(current, maxRow[i]);
+										current = _mm512_max_epi32(current, maxCol[j]);
+										current = _mm512_max_epi32(current, vzero);
+										// update maxRow and maxCol
+										maxRow[i] = _mm512_sub_epi32(maxRow[i], vextend_gap);
+										maxCol[j] = _mm512_sub_epi32(maxCol[j], vextend_gap);
+										aux1 = _mm512_sub_epi32(current, vopen_extend_gap);
+										maxRow[i] = _mm512_max_epi32(maxRow[i], aux1);
+										maxCol[j] =  _mm512_max_epi32(maxCol[j], aux1);	
+										// update row buffer
+										row[j-1] = previous;
+										previous = current;
+										// update max score
+										score = _mm512_max_epi32(score,current);
+									}
+								}
+								#pragma unroll
+								for( j = dim2*MIC_KNC_UNROLL_COUNT+1; j < dim1+1; j++) {
 									//calcuate the diagonal value
 									#if __MIC__
-									b_values = _mm512_extload_epi32(ptr_b_block+(jj-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
+									b_values = _mm512_extload_epi32(ptr_b_block+(j-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 									#endif
 									mask = _mm512_cmpge_epi32_mask(b_values,v16);
 									aux1 = _mm512_permutevar_epi32(b_values, submat_lo);
 									aux1 = _mm512_mask_permutevar_epi32(aux1, mask, b_values, submat_hi);
-									current = _mm512_add_epi32(row[jj-1], aux1);								
+									current = _mm512_add_epi32(row[j-1], aux1);								
 									// calculate current max value
 									current = _mm512_max_epi32(current, maxRow[i]);
-									current = _mm512_max_epi32(current, maxCol[jj]);
+									current = _mm512_max_epi32(current, maxCol[j]);
 									current = _mm512_max_epi32(current, vzero);
 									// update maxRow and maxCol
 									maxRow[i] = _mm512_sub_epi32(maxRow[i], vextend_gap);
-									maxCol[jj] = _mm512_sub_epi32(maxCol[jj], vextend_gap);
+									maxCol[j] = _mm512_sub_epi32(maxCol[j], vextend_gap);
 									aux1 = _mm512_sub_epi32(current, vopen_extend_gap);
 									maxRow[i] = _mm512_max_epi32(maxRow[i], aux1);
-									maxCol[jj] =  _mm512_max_epi32(maxCol[jj], aux1);	
+									maxCol[j] =  _mm512_max_epi32(maxCol[j], aux1);	
 									// update row buffer
-									row[jj-1] = previous;
+									row[j-1] = previous;
 									previous = current;
 									// update max score
 									score = _mm512_max_epi32(score,current);
@@ -256,15 +287,15 @@ void mic_search_knc_ap_multiple_chunks (char * query_sequences, unsigned short i
 
 						for (k=0; k < nbb; k++){
 
-							// calculate dim
+							// calculate dim1
 							disp_2 = k*MIC_KNC_BLOCK_SIZE;
-							dim = (MIC_KNC_BLOCK_SIZE < n[s]-disp_2 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_2);
+							dim1 = (MIC_KNC_BLOCK_SIZE < n[s]-disp_2 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_2);
 
 							// init buffers
 							#pragma unroll(MIC_KNC_UNROLL_COUNT)
-							for (i=1; i<dim+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
+							for (i=1; i<dim1+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
 							#pragma unroll(MIC_KNC_UNROLL_COUNT)
-							for (i=0; i<dim ; i++ ) row[i] = _mm512_setzero_epi32();
+							for (i=0; i<dim1 ; i++ ) row[i] = _mm512_setzero_epi32();
 							auxLastCol = _mm512_setzero_epi32();
 
 							for( i = 0; i < m[q]; i++){
@@ -277,7 +308,7 @@ void mic_search_knc_ap_multiple_chunks (char * query_sequences, unsigned short i
 								ptr_scoreProfile = scoreProfile + ((int)(ptr_a[i]))*disp_1 + disp_2*MIC_KNC_INT32_VECTOR_LENGTH;
 
 								#pragma unroll(MIC_KNC_UNROLL_COUNT)
-								for( jj=1; jj < dim+1; jj++) {
+								for( jj=1; jj < dim1+1; jj++) {
 									//calcuate the diagonal value
 									#if __MIC__
 									current = _mm512_add_epi32(row[jj-1], _mm512_extload_epi32(ptr_scoreProfile+(jj-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0));
@@ -403,7 +434,7 @@ void mic_search_knc_ap_single_chunk (char * query_sequences, unsigned short int 
 					__declspec(align(64)) __m512i v16 = _mm512_set1_epi32(16), submat_hi, submat_lo, b_values;
 					__mmask16 mask;
 
-					unsigned int tid, i, j, ii, jj, k, disp_1, disp_2, disp_3, dim, nbb;
+					unsigned int tid, i, j, ii, jj, k, disp_1, disp_2, disp_3, dim1, dim2, nbb;
 					unsigned long int t, s, q; 
 
 					// allocate memory for auxiliary buffers
@@ -439,18 +470,18 @@ void mic_search_knc_ap_single_chunk (char * query_sequences, unsigned short int 
 
 						for (k=0; k < nbb; k++){
 
-							// calculate dim
+							// calculate dim1
 							disp_1 = k*MIC_KNC_BLOCK_SIZE;
-							dim = (MIC_KNC_BLOCK_SIZE < n[s]-disp_1 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_1);
+							dim1 = (MIC_KNC_BLOCK_SIZE < n[s]-disp_1 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_1);
 
 							// get b block
 							ptr_b_block = ptr_b + disp_1*MIC_KNC_INT32_VECTOR_LENGTH;
 
 							// init buffers
 							#pragma unroll(MIC_KNC_UNROLL_COUNT)
-							for (i=1; i<dim+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
+							for (i=1; i<dim1+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
 							#pragma unroll(MIC_KNC_UNROLL_COUNT)
-							for (i=0; i<dim ; i++ ) row[i] = _mm512_setzero_epi32();
+							for (i=0; i<dim1 ; i++ ) row[i] = _mm512_setzero_epi32();
 							auxLastCol = _mm512_setzero_epi32();
 
 							for( i = 0; i < m[q]; i++){
@@ -465,29 +496,60 @@ void mic_search_knc_ap_single_chunk (char * query_sequences, unsigned short int 
 								submat_lo = _mm512_extload_epi32(queryProfile+disp_1, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 								submat_hi = _mm512_extload_epi32(queryProfile+disp_1+16, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 								#endif
+								// calculate dim2
+								dim2 = dim1 / MIC_KNC_UNROLL_COUNT;
 
-								#pragma unroll(MIC_KNC_UNROLL_COUNT)
-								for( jj=1; jj < dim+1; jj++) {
+								for (ii=0; ii<dim2 ; ii++) {
+
+									#pragma unroll(MIC_KNC_UNROLL_COUNT)
+									for( j=ii*MIC_KNC_UNROLL_COUNT+1, jj=0; jj < MIC_KNC_UNROLL_COUNT;  jj++, j++) {
+										//calcuate the diagonal value
+										#if __MIC__
+										b_values = _mm512_extload_epi32(ptr_b_block+(j-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
+										#endif
+										mask = _mm512_cmpge_epi32_mask(b_values,v16);
+										aux1 = _mm512_permutevar_epi32(b_values, submat_lo);
+										aux1 = _mm512_mask_permutevar_epi32(aux1, mask, b_values, submat_hi);
+										current = _mm512_add_epi32(row[j-1], aux1);								
+										// calculate current max value
+										current = _mm512_max_epi32(current, maxRow[i]);
+										current = _mm512_max_epi32(current, maxCol[j]);
+										current = _mm512_max_epi32(current, vzero);
+										// update maxRow and maxCol
+										maxRow[i] = _mm512_sub_epi32(maxRow[i], vextend_gap);
+										maxCol[j] = _mm512_sub_epi32(maxCol[j], vextend_gap);
+										aux1 = _mm512_sub_epi32(current, vopen_extend_gap);
+										maxRow[i] = _mm512_max_epi32(maxRow[i], aux1);
+										maxCol[j] =  _mm512_max_epi32(maxCol[j], aux1);	
+										// update row buffer
+										row[j-1] = previous;
+										previous = current;
+										// update max score
+										score = _mm512_max_epi32(score,current);
+									}
+								}
+								#pragma unroll
+								for( j = dim2*MIC_KNC_UNROLL_COUNT+1; j < dim1+1; j++) {
 									//calcuate the diagonal value
 									#if __MIC__
-									b_values = _mm512_extload_epi32(ptr_b_block+(jj-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
+									b_values = _mm512_extload_epi32(ptr_b_block+(j-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
 									#endif
 									mask = _mm512_cmpge_epi32_mask(b_values,v16);
 									aux1 = _mm512_permutevar_epi32(b_values, submat_lo);
 									aux1 = _mm512_mask_permutevar_epi32(aux1, mask, b_values, submat_hi);
-									current = _mm512_add_epi32(row[jj-1], aux1);								
+									current = _mm512_add_epi32(row[j-1], aux1);								
 									// calculate current max value
 									current = _mm512_max_epi32(current, maxRow[i]);
-									current = _mm512_max_epi32(current, maxCol[jj]);
+									current = _mm512_max_epi32(current, maxCol[j]);
 									current = _mm512_max_epi32(current, vzero);
 									// update maxRow and maxCol
 									maxRow[i] = _mm512_sub_epi32(maxRow[i], vextend_gap);
-									maxCol[jj] = _mm512_sub_epi32(maxCol[jj], vextend_gap);
+									maxCol[j] = _mm512_sub_epi32(maxCol[j], vextend_gap);
 									aux1 = _mm512_sub_epi32(current, vopen_extend_gap);
 									maxRow[i] = _mm512_max_epi32(maxRow[i], aux1);
-									maxCol[jj] =  _mm512_max_epi32(maxCol[jj], aux1);	
+									maxCol[j] =  _mm512_max_epi32(maxCol[j], aux1);	
 									// update row buffer
-									row[jj-1] = previous;
+									row[j-1] = previous;
 									previous = current;
 									// update max score
 									score = _mm512_max_epi32(score,current);
@@ -549,15 +611,15 @@ void mic_search_knc_ap_single_chunk (char * query_sequences, unsigned short int 
 
 						for (k=0; k < nbb; k++){
 
-							// calculate dim
+							// calculate dim1
 							disp_2 = k*MIC_KNC_BLOCK_SIZE;
-							dim = (MIC_KNC_BLOCK_SIZE < n[s]-disp_2 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_2);
+							dim1 = (MIC_KNC_BLOCK_SIZE < n[s]-disp_2 ? MIC_KNC_BLOCK_SIZE : n[s]-disp_2);
 
 							// init buffers
 							#pragma unroll(MIC_KNC_UNROLL_COUNT)
-							for (i=1; i<dim+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
+							for (i=1; i<dim1+1 ; i++ ) maxCol[i] = _mm512_setzero_epi32(); //index 0 is not used
 							#pragma unroll(MIC_KNC_UNROLL_COUNT)
-							for (i=0; i<dim ; i++ ) row[i] = _mm512_setzero_epi32();
+							for (i=0; i<dim1 ; i++ ) row[i] = _mm512_setzero_epi32();
 							auxLastCol = _mm512_setzero_epi32();
 
 							for( i = 0; i < m[q]; i++){
@@ -570,7 +632,7 @@ void mic_search_knc_ap_single_chunk (char * query_sequences, unsigned short int 
 								ptr_scoreProfile = scoreProfile + ((int)(ptr_a[i]))*disp_1 + disp_2*MIC_KNC_INT32_VECTOR_LENGTH;
 
 								#pragma unroll(MIC_KNC_UNROLL_COUNT)
-								for( jj=1; jj < dim+1; jj++) {
+								for( jj=1; jj < dim1+1; jj++) {
 									//calcuate the diagonal value
 									#if __MIC__
 									current = _mm512_add_epi32(row[jj-1], _mm512_extload_epi32(ptr_scoreProfile+(jj-1)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0));
