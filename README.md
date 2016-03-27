@@ -124,7 +124,7 @@ SWIMM execution
 
 ### Importante notes
 * Database and query files must be in FASTA format.
-* Supported substitution matrixes: BLOSUM45, BLOSUM50, BLOSUM62, BLOSUM80, BLOSUM90, PAM30, PAM70 and PAM250. User-specific substitution matrix will be supported soon.
+* Supported substitution matrixes: BLOSUM45, BLOSUM50, BLOSUM62, BLOSUM80, BLOSUM90, PAM30, PAM70 and PAM250.
 * For Xeon Phi, users can choose among query profile, score profile or adaptive profile. Because for shorter queries, query profile is better, we recommend using adaptive profile and tune the query length threshold (default: 567). For Xeon, score profile is always employed.
 * Workload balance and data locality exploitation are critical to achieve good performance. Tune the chunk size and the Xeon block size with the *-k* and *-b* options, respectively.
 
@@ -134,6 +134,8 @@ Enzo Rucci, Carlos García, Guillermo Botella, Armando De Giusti, Marcelo Naiouf
 Concurrency and Computation: Practice and Experience 07/2015; DOI:10.1002/cpe.3598
 
 ## Changelog
+* March 27, 2016 (v1.1.0)
+Improved CPU inner loop through manual unrolling and index optimizations
 * November 06, 2015 (v1.0.3)
 Fixed loop unrolling limitation with ICC 15.0+
 * July 09, 2015 (v1.0.2)

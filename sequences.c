@@ -211,7 +211,7 @@ void preprocess_db (char * input_filename, char * out_filename, int n_procs) {
 	free(sequences_lengths);
 	free(b);
 
-	printf("\nSWIMM v1.0.3\n\n");
+	printf("\nSWIMM v1.1.0\n\n");
 	printf("Database file:\t\t\t %s\n",input_filename); 
 	printf("Database size:\t\t\t%ld sequences (%ld residues) \n",sequences_count,D);
 	printf("Preprocessed database name:\t%s\n",out_filename); 
@@ -221,12 +221,12 @@ void preprocess_db (char * input_filename, char * out_filename, int n_procs) {
 
 // Load query sequence from file in a
 void load_query_sequences(char * queries_filename, int execution_mode, char ** ptr_query_sequences, char *** ptr_query_headers, unsigned short int **ptr_query_sequences_lengths,
-						unsigned long int * query_sequences_count, unsigned long int * ptr_Q, unsigned int ** ptr_query_sequences_disp, int n_procs) {
+						unsigned short int **ptr_m, unsigned long int * query_sequences_count, unsigned long int * ptr_Q, unsigned int ** ptr_query_sequences_disp, int n_procs) {
 
 	long int i, j, k;
 	unsigned long int sequences_count=0, Q=0, disp, accum, chunk_size;
 	unsigned int * sequences_disp;
-	unsigned short int *sequences_lengths, * title_lengths, *tmp, length=0, tmp_length, ok;
+	unsigned short int *sequences_lengths, *m, * title_lengths, *tmp, length=0, tmp_length, ok;
 	char ** sequences=NULL, **titles, buffer[BUFFER_SIZE], filename[BUFFER_SIZE], * bin_filename, * res, *tmp_seq, *a, diff, new_line='\n';
 	FILE * sequences_file;
 
@@ -271,7 +271,9 @@ void load_query_sequences(char * queries_filename, int execution_mode, char ** p
 
 	// copy lengths to aligned buffer
 	tmp = sequences_lengths;
+	m = (unsigned short int *) _mm_malloc (sequences_count*sizeof(unsigned short int), (execution_mode == CPU_ONLY ? 32 : 64));
 	sequences_lengths = (unsigned short int *) _mm_malloc (sequences_count*sizeof(unsigned short int), (execution_mode == CPU_ONLY ? 32 : 64));
+	memcpy(m,tmp,sequences_count*sizeof(unsigned short int));
 	memcpy(sequences_lengths,tmp,sequences_count*sizeof(unsigned short int));
 	free(tmp);
 
@@ -341,21 +343,50 @@ void load_query_sequences(char * queries_filename, int execution_mode, char ** p
 	// Sort sequence array by length 
 	sort_sequences(sequences,titles,sequences_lengths, sequences_count, n_procs);
 	
-	// calculate total number of residues
-	#pragma omp parallel for reduction(+:Q) num_threads(n_procs)
-	for (i=0; i< sequences_count; i++ )
-		Q = Q +  sequences_lengths[i];
+	// make sequences length even for CPU and Hybrid computing
+	if (execution_mode == MIC_ONLY){
 
-	*ptr_Q = Q;
+		// calculate total number of residues
+		#pragma omp parallel for reduction(+:Q) num_threads(n_procs)
+		for (i=0; i< sequences_count; i++ )
+			Q = Q +  sequences_lengths[i];
 
-	a = (char *) _mm_malloc(Q*sizeof(char),  (execution_mode == CPU_ONLY ? 32 : 64));	
-	if (a == NULL) { printf("SWIMM: An error occurred while allocating memory for sequences.\n"); exit(1); }
+		*ptr_Q = Q;
 
-	disp = 0;
-	for (i=0; i< sequences_count; i++ ) {
-		memcpy(a+disp,sequences[i],sequences_lengths[i]);
-		disp += sequences_lengths[i];
+		a = (char *) _mm_malloc(Q*sizeof(char),  64);	
+		if (a == NULL) { printf("SWIMM: An error occurred while allocating memory for sequences.\n"); exit(1); }
+
+		disp = 0;
+		for (i=0; i< sequences_count; i++ ) {
+			// copy query sequence
+			memcpy(a+disp,sequences[i],sequences_lengths[i]);
+			disp += sequences_lengths[i];
+		}
+	} else {
+
+		// calculate total number of residues
+		#pragma omp parallel for reduction(+:Q) num_threads(n_procs)
+		for (i=0; i< sequences_count; i++ )
+			Q = Q +  sequences_lengths[i] + (sequences_lengths[i]%2);
+
+		*ptr_Q = Q;
+
+		a = (char *) _mm_malloc(Q*sizeof(char),  (execution_mode == CPU_ONLY ? 32 : 64));	
+		if (a == NULL) { printf("SWIMM: An error occurred while allocating memory for sequences.\n"); exit(1); }
+
+		disp = 0;
+		for (i=0; i< sequences_count; i++ ) {
+			// copy query sequence
+			memcpy(a+disp,sequences[i],sequences_lengths[i]);
+			// if length is odd then make it even and copy dummy element at last position
+			if (sequences_lengths[i]%2==1){
+				a[disp+sequences_lengths[i]]=DUMMY_ELEMENT;
+				m[i]++;
+			}
+			disp += m[i];
+		}
 	}
+
 
 	// process vect sequences DB
 	#pragma omp parallel for private(diff) num_threads(n_procs) schedule(dynamic)	
@@ -375,10 +406,11 @@ void load_query_sequences(char * queries_filename, int execution_mode, char ** p
 
 	sequences_disp[0] = 0;
 	for (i=1; i < sequences_count+1; i++) 
-		sequences_disp[i] = sequences_disp[i-1] + sequences_lengths[i-1];
+		sequences_disp[i] = sequences_disp[i-1] + m[i-1];
 
 	*ptr_query_sequences = a;
 	*ptr_query_sequences_lengths = sequences_lengths;
+	*ptr_m = m;
 	*ptr_query_sequences_disp = sequences_disp;
 	*ptr_query_headers = titles;
 	*query_sequences_count = sequences_count;
@@ -456,7 +488,7 @@ void assemble_multiple_chunks_db (char * sequences_filename, int vector_length, 
 
 	// make length multiple of 4 to allow 32/64 bytes aligned data
 	for (i=0; i< *vect_sequences_count; i++ ) 
-		vect_sequences_lengths[i] = ceil( (double) vect_sequences_lengths[i] / (double) 4) * 4;
+		vect_sequences_lengths[i] = ceil( (double) vect_sequences_lengths[i] / (double) SEQ_LEN_MULT) * SEQ_LEN_MULT;
 
 	// Calculate displacement for current sequences db 
 	vect_sequences_disp[0] = 0;
@@ -647,7 +679,7 @@ void assemble_single_chunk_db (char * sequences_filename, int vector_length, uns
 
 	// make length multiple of 4 to allow 32/64 bytes aligned data
 	for (i=0; i< *vect_sequences_db_count; i++ ) 
-		vect_sequences_lengths[i] = ceil( (double) vect_sequences_lengths[i] / (double) 4) * 4;
+		vect_sequences_lengths[i] = ceil( (double) vect_sequences_lengths[i] / (double) SEQ_LEN_MULT) * SEQ_LEN_MULT;
 
 	#pragma omp parallel for reduction(+:aux_vD) num_threads(n_procs)
 	for (i=0; i< *vect_sequences_db_count; i++ )

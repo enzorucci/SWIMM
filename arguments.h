@@ -6,7 +6,7 @@
 #include <argp.h>
 #include "submat.h"
 
-#define MAX_CHUNK_SIZE 134217728 // 128Mb
+#define MAX_CHUNK_SIZE 100663296 // 96Mb
 #define VECTOR_LENGTH 16
 #define CPU_ONLY 0
 #define MIC_ONLY 1
@@ -22,6 +22,7 @@
 #define SCORE_PROFILE 'S'
 #define ADAPTIVE_PROFILE 'A'
 #define QUERY_LENGTH_THRESHOLD 567
+
 
 // Arguments parsing
 void program_arguments_processing (int argc, char * argv[]);

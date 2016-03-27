@@ -18,7 +18,7 @@
 #define MIC_KNC_UNROLL_COUNT 6
 #define MIC_KNC_BLOCK_SIZE 256
 
-#define BLOSUM_ROWS_x_MIC_KNC_INT32_VECTOR_LENGTH 368
+#define BLOSUM_ROWS_x_MIC_KNC_INT32_VECTOR_LENGTH 384
 
 #define ALLOC alloc_if(1) free_if(0)
 #define FREE alloc_if(0) free_if(1)

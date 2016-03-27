@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
 	unsigned long int i, j, sequences_count, D, vect_sequences_db_count, vD, * chunk_vD, * vect_sequences_db_disp, query_sequences_count, Q;
 	unsigned int chunk_count, * chunk_vect_sequences_db_count, ** chunk_vect_sequences_db_disp, * query_sequences_disp;
 	int max_title_length, *scores;
-	unsigned short int ** chunk_vect_sequences_db_lengths, * vect_sequences_db_lengths, sequences_db_max_length, * query_sequences_lengths;
+	unsigned short int ** chunk_vect_sequences_db_lengths, * vect_sequences_db_lengths, sequences_db_max_length, * query_sequences_lengths, *m;
 	char ** chunk_vect_sequences_db, * vect_sequences_db, *query_sequences, ** query_headers, ** sequence_db_headers, ** tmp_sequence_db_headers;
     time_t current_time = time(NULL);
 	double workTime, tick;
@@ -25,11 +25,11 @@ int main(int argc, char *argv[]) {
 	else {
 		/* Database search */
 		// Print database search information
-		printf("\nSWIMM v1.0.3 \n\n");
+		printf("\nSWIMM v1.1.0 \n\n");
 		printf("Database file:\t\t\t%s\n",sequences_filename);
 
 		// Load query sequence from file in a
-		load_query_sequences(queries_filename,execution_mode,&query_sequences,&query_headers,&query_sequences_lengths,&query_sequences_count,&Q,&query_sequences_disp,cpu_threads);
+		load_query_sequences(queries_filename,execution_mode,&query_sequences,&query_headers,&query_sequences_lengths,&m,&query_sequences_count,&Q,&query_sequences_disp,cpu_threads);
 
 		// Assemble database (single chunk for CPU, multiple chunks for MIC and Heterogeneous)
 		if (execution_mode == CPU_ONLY) {
@@ -60,12 +60,12 @@ int main(int argc, char *argv[]) {
 		if (execution_mode == CPU_ONLY) {
 			if (vector_length == CPU_SSE_INT8_VECTOR_LENGTH)
 				// CPU search using SSE instrucions and Score Profile technique
-				cpu_search_sse_sp (query_sequences, query_sequences_lengths, query_sequences_count, query_sequences_disp, vect_sequences_db,
+				cpu_search_sse_sp (query_sequences, m, query_sequences_count, query_sequences_disp, vect_sequences_db,
 					vect_sequences_db_lengths, vect_sequences_db_count, vect_sequences_db_disp, submat, open_gap, extend_gap, cpu_threads, cpu_block_size, scores,
 					&workTime);
 			else
 				// CPU search using AVX2 instrucions and Score Profile technique
-				cpu_search_avx2_sp (query_sequences, query_sequences_lengths, query_sequences_count, query_sequences_disp, vect_sequences_db,
+				cpu_search_avx2_sp (query_sequences, m, query_sequences_count, query_sequences_disp, vect_sequences_db,
 					vect_sequences_db_lengths, vect_sequences_db_count, vect_sequences_db_disp, submat, open_gap, extend_gap, cpu_threads, cpu_block_size, scores,
 					&workTime);
 		} else {
@@ -79,11 +79,11 @@ int main(int argc, char *argv[]) {
 						query_length_threshold = 0;
 				// MIC search using KNC instrucions and Adaptive Profile technique
 				if (chunk_count > 1)
-					mic_search_knc_ap_multiple_chunks (query_sequences, query_sequences_lengths, query_sequences_count, Q, query_sequences_disp, vect_sequences_db_count, 
+					mic_search_knc_ap_multiple_chunks (query_sequences, m, query_sequences_count, Q, query_sequences_disp, vect_sequences_db_count, 
 						chunk_vect_sequences_db, chunk_count, chunk_vect_sequences_db_count, chunk_vect_sequences_db_lengths, chunk_vect_sequences_db_disp,
 						chunk_vD, submat, open_gap, extend_gap, num_mics, mic_threads, scores, &workTime, query_length_threshold);
 				else
-					mic_search_knc_ap_single_chunk (query_sequences, query_sequences_lengths, query_sequences_count, Q, query_sequences_disp, vect_sequences_db_count, 
+					mic_search_knc_ap_single_chunk (query_sequences, m, query_sequences_count, Q, query_sequences_disp, vect_sequences_db_count, 
 						chunk_vect_sequences_db, chunk_count, chunk_vect_sequences_db_count, chunk_vect_sequences_db_lengths, chunk_vect_sequences_db_disp,
 						chunk_vD, submat, open_gap, extend_gap, num_mics, mic_threads, scores, &workTime, query_length_threshold);
 
@@ -98,13 +98,13 @@ int main(int argc, char *argv[]) {
 
 				if (vector_length == CPU_SSE_INT8_VECTOR_LENGTH) 
 					// Heterogeneus search with: (1) SSE instructions and Score Profile in CPU (2) KNC instructions and Adaptive Profile in MIC
-					het_search_sse_sp_knc_ap (query_sequences, query_sequences_lengths, query_sequences_count, Q, query_sequences_disp, 
+					het_search_sse_sp_knc_ap (query_sequences, m, query_sequences_count, Q, query_sequences_disp, 
 						vect_sequences_db_count, chunk_vect_sequences_db, chunk_count, chunk_vect_sequences_db_count, chunk_vect_sequences_db_lengths,
 						chunk_vect_sequences_db_disp, chunk_vD, submat, open_gap, extend_gap, cpu_threads, cpu_block_size, num_mics, mic_threads, scores, 
 						&workTime, query_length_threshold);
 				else
 					// Heterogeneus search with: (1) AVX2 instructions and Score Profile in CPU (2) KNC instructions and Adaptive Profile in MIC
-					het_search_avx2_sp_knc_ap (query_sequences, query_sequences_lengths, query_sequences_count, Q, query_sequences_disp, 
+					het_search_avx2_sp_knc_ap (query_sequences, m, query_sequences_count, Q, query_sequences_disp, 
 						vect_sequences_db_count, chunk_vect_sequences_db, chunk_count, chunk_vect_sequences_db_count, chunk_vect_sequences_db_lengths,
 						chunk_vect_sequences_db_disp, chunk_vD, submat, open_gap, extend_gap, cpu_threads, cpu_block_size, num_mics, mic_threads, scores, 
 						&workTime, query_length_threshold);
@@ -116,6 +116,7 @@ int main(int argc, char *argv[]) {
 		// Free allocated memory
 		_mm_free(query_sequences);
 		_mm_free(query_sequences_disp);
+		_mm_free(m);
 		if (execution_mode == CPU_ONLY){
 			_mm_free(vect_sequences_db);
 			_mm_free(vect_sequences_db_lengths);
@@ -154,7 +155,7 @@ int main(int argc, char *argv[]) {
 		printf("Search time:\t\t\t%lf seconds\n",workTime);
 		printf("Search speed:\t\t\t%.2lf GCUPS\n",(Q*D) / (workTime*1000000000));
 		if (execution_mode == CPU_ONLY) {
-			printf("Execution mode:\t\t\tXeon only (%d threads)\n",cpu_threads);
+			printf("Execution mode:\t\t\tXeon only (%d threads, block width = %d)\n",cpu_threads,cpu_block_size);
 			printf("Profile technique:\t\tScore Profile\n");
 			printf("Instruction set:\t\t%s (vector length = %d)\n",(vector_length == 16 ? "SSE" : "AVX2"),vector_length);
 		}
@@ -166,8 +167,9 @@ int main(int argc, char *argv[]) {
 					printf(" (threshold = %d)",query_length_threshold);
 				printf("\nInstruction set:\t\tKNC (vector length = %d)\n",vector_length);
 				printf("Max. chunk size:\t\t%ld bytes\n",max_chunk_size);
+				printf("Chunk count:\t\t\t%ld \n",chunk_count);
 			} else {
-				printf("Execution mode:\t\t\tHeterogeneous (%d CPU threads and %d Xeon Phis with %d threads each)\n",cpu_threads,num_mics,mic_threads);
+				printf("Execution mode:\t\t\tHybrid (%d CPU threads (block width = %d) and %d Xeon Phis with %d threads each)\n",cpu_threads,cpu_block_size,num_mics,mic_threads);
 				printf("Profile technique:\t\tScore Profile in Xeon, %s in Xeon Phi",(profile == QUERY_PROFILE ? "Query Profile" : (profile == SCORE_PROFILE ? "Score Profile" : "Adaptive Profile")));
 				if (profile == ADAPTIVE_PROFILE)
 					printf(" (threshold = %d)",query_length_threshold);
@@ -175,6 +177,7 @@ int main(int argc, char *argv[]) {
 					printf("\nInstruction set:\t\tSSE+KNC (vector length = 16)\n");
 				else
 					printf("\nInstruction set:\t\tAVX2 (vector length = 32) + KNC (vector length = 16)\n");
+				printf("Chunk count:\t\t\t%ld \n",chunk_count);
 				printf("Max. chunk size:\t\t%ld bytes\n",max_chunk_size);
 			}
 		}
