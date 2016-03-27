@@ -85,7 +85,7 @@ static int parse_opt (int key, char *arg, struct argp_state *state) {
 			break;
 		case 'g':
 			open_gap = atoi(arg);
-			if ((open_gap < 0) || (open_gap > 255))
+			if ((open_gap < 0) || (open_gap > 127))
 				argp_failure (state, 1, 0, "%s is not a valid option for gap open penalty.",open_gap);
 			break;
 		case 'e':
@@ -116,8 +116,8 @@ static int parse_opt (int key, char *arg, struct argp_state *state) {
 			break;
 		case 'u':
 			query_length_threshold = atoi(arg);
-			if ((execution_mode < 0) || (execution_mode > 65535))
-				argp_failure (state, 1, 0, "%s is not a valid option for query length threshold.",execution_mode);
+			if ((query_length_threshold < 0) || (query_length_threshold > 65535))
+				argp_failure (state, 1, 0, "%s is not a valid option for query length threshold.",query_length_threshold);
 			break;
 		case 'v':
 			vector_length = atoi(arg);
