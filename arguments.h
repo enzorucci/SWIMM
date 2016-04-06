@@ -12,7 +12,7 @@
 #define MIC_ONLY 1
 #define HETEROGENEOUS 2
 #define CPU_THREADS 4 
-#define CPU_BLOCK_SIZE 256
+#define CPU_BLOCK_SIZE 120
 #define NUM_MICS 1
 #define MIC_THREADS 240
 #define OPEN_GAP 10

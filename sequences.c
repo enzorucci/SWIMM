@@ -211,7 +211,7 @@ void preprocess_db (char * input_filename, char * out_filename, int n_procs) {
 	free(sequences_lengths);
 	free(b);
 
-	printf("\nSWIMM v1.1.0\n\n");
+	printf("\nSWIMM v1.1.1\n\n");
 	printf("Database file:\t\t\t %s\n",input_filename); 
 	printf("Database size:\t\t\t%ld sequences (%ld residues) \n",sequences_count,D);
 	printf("Preprocessed database name:\t%s\n",out_filename); 
