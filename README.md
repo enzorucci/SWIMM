@@ -134,6 +134,8 @@ Enzo Rucci, Carlos García, Guillermo Botella, Armando De Giusti, Marcelo Naiouf
 Concurrency and Computation: Practice and Experience 07/2015; DOI:10.1002/cpe.3598
 
 ## Changelog
+* April 06, 2016 (v1.1.1)
+Reduced score profile memory consumption. Improved concurrency when using two or more query sequences. Bug fix for block size setting.
 * March 27, 2016 (v1.1.0)
 Improved CPU inner loop through manual unrolling and index optimizations
 * November 06, 2015 (v1.0.3)
