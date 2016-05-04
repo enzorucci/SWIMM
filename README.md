@@ -133,6 +133,10 @@ SWIMM execution
 Enzo Rucci, Carlos García, Guillermo Botella, Armando De Giusti, Marcelo Naiouf and Manuel Prieto-Matías.
 Concurrency and Computation: Practice and Experience 07/2015; DOI:10.1002/cpe.3598
 
+*Smith-Waterman Algorithm on Heterogeneous Systems: A Case Study.*
+Enzo Rucci, Armando De Giusti, Marcelo Naiouf, Carlos García, Guillermo Botella and Manuel Prieto-Matías.
+2014 IEEE International Conference on Cluster Computing (CLUSTER); DOI:10.1109/CLUSTER.2014.6968784
+
 ## Changelog
 * March 27, 2016 (v1.1.0)
 Improved CPU inner loop through manual unrolling and index optimizations
