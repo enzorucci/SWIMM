@@ -32,8 +32,8 @@ void program_arguments_processing (int argc, char * argv[]) {
 		{ "query_length_threshold", 'u', "<integer>", 0, "Query length threshold. Valid option only when Adaptive Profile is used (default: 567).", 3},
 		{ "vector_length", 'v', "<integer>", 0, "Vector length: 16 for Xeon Phi, 16 for Xeon with SSE support, 32 for Xeon with AVX2 support (default: 16).", 3},
 		{ "top", 'r', "<integer>", 0, "Number of scores to show (default: 10).", 3},
-		{ "max_chunk_size", 'k', "<integer>", 0, "Maximum chunk size in bytes. Valid option only when execution mode is 1 or 2 (default: 134217728).", 3},
-		{ "block_size", 'b', "<integer>", 0, "Xeon block size. Valid option when execution mode is 0 or 2 (default: 256).", 3},
+		{ "max_chunk_size", 'k', "<integer>", 0, "Maximum chunk size in bytes. Valid option only when execution mode is 1 or 2 (default: 100663296).", 3},
+		{ "block_size", 'b', "<integer>", 0, "Xeon block size. Valid option when execution mode is 0 or 2 (default: 120).", 3},
 		{ 0 }
 	};
 

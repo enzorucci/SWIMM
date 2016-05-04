@@ -112,7 +112,7 @@ void mic_search_knc_ap_multiple_chunks (char * query_sequences, unsigned short i
 						maxRow_ptrs[tid] = (__m512i *) _mm_malloc((query_sequences_max_length)*sizeof(__m512i), 64);
 						lastCol_ptrs[tid] = (__m512i *) _mm_malloc((query_sequences_max_length)*sizeof(__m512i), 64);
 						if (query_sequences_max_length >= query_length_threshold)
-							scoreProfile_ptrs[tid] = (char *) _mm_malloc(BLOSUM_ROWS_x_MIC_KNC_INT32_VECTOR_LENGTH*sequences_db_max_length*sizeof(char),16);
+							scoreProfile_ptrs[tid] = (char *) _mm_malloc(BLOSUM_ROWS_x_MIC_KNC_INT32_VECTOR_LENGTH*MIC_KNC_BLOCK_SIZE*sizeof(char),16);
 					}
 					
 					row = row_ptrs[tid];
@@ -229,23 +229,6 @@ void mic_search_knc_ap_multiple_chunks (char * query_sequences, unsigned short i
 						ptr_b = b + b_disp[s];
 						ptr_scores = mic_scores + (q*offload_vect_sequences_db_count+s)*MIC_KNC_INT32_VECTOR_LENGTH;
 
-						// build score profile
-						disp_1 = n[s]*MIC_KNC_INT32_VECTOR_LENGTH;
-						for (i=0; i<n[s] ;i++ ) {
-							#if __MIC__
-							aux1 = _mm512_extload_epi32(ptr_b+i*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
-							#endif
-							disp_2 = i*MIC_KNC_INT32_VECTOR_LENGTH;
-							#pragma unroll(MIC_KNC_UNROLL_COUNT)
-							for (j=0; j< BLOSUM_ROWS-1; j++) {
-								#if __MIC__
-								aux2 = _mm512_i32extgather_epi32(aux1, submat + j*BLOSUM_COLS, _MM_UPCONV_EPI32_SINT8  , 1, 0);
-								_mm512_extstore_epi32(scoreProfile+disp_2+j*disp_1, aux2, _MM_DOWNCONV_EPI32_SINT8 , _MM_HINT_NONE );
-								#endif
-
-							}
-						}
-
 						// init buffers
 						#pragma unroll(MIC_KNC_UNROLL_COUNT)
 						for (i=0; i<m[q] ; i++ ) maxRow[i] = _mm512_setzero_epi32(); // index 0 is not used
@@ -271,6 +254,23 @@ void mic_search_knc_ap_multiple_chunks (char * query_sequences, unsigned short i
 							for (i=0; i<dim ; i++ ) row[i] = _mm512_setzero_epi32();
 							auxLastCol = _mm512_setzero_epi32();
 
+							// build score profile
+							disp_1 = dim*MIC_KNC_INT32_VECTOR_LENGTH;
+							for (i=0; i<dim ;i++ ) {
+								#if __MIC__
+								aux1 = _mm512_extload_epi32(ptr_b+(disp_2+i)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
+								#endif
+								disp_3 = i*MIC_KNC_INT32_VECTOR_LENGTH;
+								#pragma unroll(MIC_KNC_UNROLL_COUNT)
+								for (j=0; j< BLOSUM_ROWS-1; j++) {
+									#if __MIC__
+									aux2 = _mm512_i32extgather_epi32(aux1, submat + j*BLOSUM_COLS, _MM_UPCONV_EPI32_SINT8  , 1, 0);
+									_mm512_extstore_epi32(scoreProfile+disp_3+j*disp_1, aux2, _MM_DOWNCONV_EPI32_SINT8 , _MM_HINT_NONE );
+									#endif
+
+								}
+							}
+
 							for( i = 0; i < m[q]; i++){
 						
 								// previous must start in 0
@@ -278,7 +278,7 @@ void mic_search_knc_ap_multiple_chunks (char * query_sequences, unsigned short i
 								// update row[0] with lastCol elements
 								row[0] = lastCol[i];
 								// calculate i displacement
-								ptr_scoreProfile = scoreProfile + ((int)(ptr_a[i]))*disp_1 + disp_2*MIC_KNC_INT32_VECTOR_LENGTH;
+								ptr_scoreProfile = scoreProfile + ((int)(ptr_a[i]))*disp_1;
 								// store maxRow in auxiliar var
 								aux2 = maxRow[i];
 
@@ -420,7 +420,7 @@ void mic_search_knc_ap_single_chunk (char * query_sequences, unsigned short int 
 					maxRow = (__m512i *) _mm_malloc((query_sequences_max_length)*sizeof(__m512i), 64);
 					lastCol = (__m512i *) _mm_malloc((query_sequences_max_length)*sizeof(__m512i), 64);
 					if (query_sequences_max_length >= query_length_threshold)
-						scoreProfile = (char *) _mm_malloc(BLOSUM_ROWS_x_MIC_KNC_INT32_VECTOR_LENGTH*sequences_db_max_length*sizeof(char),16);
+						scoreProfile = (char *) _mm_malloc(BLOSUM_ROWS_x_MIC_KNC_INT32_VECTOR_LENGTH*MIC_KNC_BLOCK_SIZE*sizeof(char),16);
 
 					// calculate chunk alignments using query profile technique
 					#pragma omp for schedule(dynamic) nowait
@@ -530,23 +530,6 @@ void mic_search_knc_ap_single_chunk (char * query_sequences, unsigned short int 
 						ptr_b = b + b_disp[s];
 						ptr_scores = scores + (q*offload_vect_sequences_db_count+s)*MIC_KNC_INT32_VECTOR_LENGTH;
 
-						// build score profile
-						disp_1 = n[s]*MIC_KNC_INT32_VECTOR_LENGTH;
-						for (i=0; i<n[s] ;i++ ) {
-							#if __MIC__
-							aux1 = _mm512_extload_epi32(ptr_b+i*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
-							#endif
-							disp_2 = i*MIC_KNC_INT32_VECTOR_LENGTH;
-							#pragma unroll(MIC_KNC_UNROLL_COUNT)
-							for (j=0; j< BLOSUM_ROWS-1; j++) {
-								#if __MIC__
-								aux2 = _mm512_i32extgather_epi32(aux1, submat + j*BLOSUM_COLS, _MM_UPCONV_EPI32_SINT8  , 1, 0);
-								_mm512_extstore_epi32(scoreProfile+disp_2+j*disp_1, aux2, _MM_DOWNCONV_EPI32_SINT8 , _MM_HINT_NONE );
-								#endif
-
-							}
-						}
-
 						// init buffers
 						#pragma unroll(MIC_KNC_UNROLL_COUNT)
 						for (i=0; i<m[q] ; i++ ) maxRow[i] = _mm512_setzero_epi32(); // index 0 is not used
@@ -572,6 +555,24 @@ void mic_search_knc_ap_single_chunk (char * query_sequences, unsigned short int 
 							for (i=0; i<dim ; i++ ) row[i] = _mm512_setzero_epi32();
 							auxLastCol = _mm512_setzero_epi32();
 
+							// build score profile
+							disp_1 = dim*MIC_KNC_INT32_VECTOR_LENGTH;
+							for (i=0; i< dim ;i++ ) {
+								#if __MIC__
+								aux1 = _mm512_extload_epi32(ptr_b+(disp_2+i)*MIC_KNC_INT32_VECTOR_LENGTH, _MM_UPCONV_EPI32_SINT8, _MM_BROADCAST32_NONE, 0);
+								#endif
+								disp_3 = i*MIC_KNC_INT32_VECTOR_LENGTH;
+								#pragma unroll(MIC_KNC_UNROLL_COUNT)
+								for (j=0; j< BLOSUM_ROWS-1; j++) {
+									#if __MIC__
+									aux2 = _mm512_i32extgather_epi32(aux1, submat + j*BLOSUM_COLS, _MM_UPCONV_EPI32_SINT8  , 1, 0);
+									_mm512_extstore_epi32(scoreProfile+disp_3+j*disp_1, aux2, _MM_DOWNCONV_EPI32_SINT8 , _MM_HINT_NONE );
+									#endif
+
+								}
+							}
+
+
 							for( i = 0; i < m[q]; i++){
 						
 								// previous must start in 0
@@ -579,7 +580,7 @@ void mic_search_knc_ap_single_chunk (char * query_sequences, unsigned short int 
 								// update row[0] with lastCol elements
 								row[0] = lastCol[i];
 								// calculate i displacement
-								ptr_scoreProfile = scoreProfile + ((int)(ptr_a[i]))*disp_1 + disp_2*MIC_KNC_INT32_VECTOR_LENGTH;
+								ptr_scoreProfile = scoreProfile + ((int)(ptr_a[i]))*disp_1;
 								// store maxRow in auxiliar var
 								aux2 = maxRow[i];
 
