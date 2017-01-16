@@ -15,4 +15,6 @@
 #include "HETsearch.h"
 #include "utils.h"
 
+#define VERSION "1.1.2"
+
 #endif

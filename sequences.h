@@ -9,13 +9,14 @@
 #include <omp.h>
 #include "arguments.h"
 #include "utils.h"
+#include "swimm.h"
 
 #define BUFFER_SIZE 1000
 #define ALLOCATION_CHUNK 1000
 
 #define DUMMY_ELEMENT 'Z'+1
 #define PREPROCESSED_DUMMY_ELEMENT 24
-#define SEQ_LEN_MULT 5
+#define SEQ_LEN_MULT 4
 
 // DB preprocessing
 void preprocess_db (char * input_filename, char * out_filename, int n_procs);
