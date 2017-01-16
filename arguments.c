@@ -136,7 +136,6 @@ static int parse_opt (int key, char *arg, struct argp_state *state) {
 			break;
 		case 'b':
 			cpu_block_size = atoi(arg);
-			cpu_block_size = ((cpu_block_size % SEQ_LEN_MULT != 0) ? (cpu_block_size/SEQ_LEN_MULT)*SEQ_LEN_MULT : cpu_block_size);
 			if (cpu_block_size < 0)
 				argp_failure (state, 1, 0, "The Xeon block size must be greater than 0.");
 			break;
