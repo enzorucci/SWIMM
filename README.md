@@ -138,6 +138,8 @@ Enzo Rucci, Armando De Giusti, Marcelo Naiouf, Carlos García, Guillermo Botella
 2014 IEEE International Conference on Cluster Computing (CLUSTER); DOI:10.1109/CLUSTER.2014.6968784
 
 ## Changelog
+* January 16, 2016 (v1.1.2)
+Back to compiler-based loop unrolling.
 * April 06, 2016 (v1.1.1)
 Reduced score profile memory consumption. Improved concurrency when using two or more query sequences. Bug fix for block size setting.
 * March 27, 2016 (v1.1.0)
