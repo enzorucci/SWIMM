@@ -486,10 +486,6 @@ void assemble_multiple_chunks_db (char * sequences_filename, int vector_length, 
 		vect_sequences_lengths[i] = sequences_lengths[(i+1)*vector_length-1];
 	vect_sequences_lengths[*vect_sequences_count-1] = sequences_lengths[*sequences_count-1];
 
-	// make length multiple of 4 to allow 32/64 bytes aligned data
-	for (i=0; i< *vect_sequences_count; i++ ) 
-		vect_sequences_lengths[i] = ceil( (double) vect_sequences_lengths[i] / (double) SEQ_LEN_MULT) * SEQ_LEN_MULT;
-
 	// Calculate displacement for current sequences db 
 	vect_sequences_disp[0] = 0;
 	for (k=1; k < *vect_sequences_count+1; k++) 
@@ -676,10 +672,6 @@ void assemble_single_chunk_db (char * sequences_filename, int vector_length, uns
 	for (i=0; i< *vect_sequences_db_count - 1; i++ ) 
 		vect_sequences_lengths[i] = sequences_lengths[(i+1)*vector_length-1];
 	vect_sequences_lengths[*vect_sequences_db_count-1] = sequences_lengths[*sequences_count-1];
-
-	// make length multiple of 4 to allow 32/64 bytes aligned data
-	for (i=0; i< *vect_sequences_db_count; i++ ) 
-		vect_sequences_lengths[i] = ceil( (double) vect_sequences_lengths[i] / (double) SEQ_LEN_MULT) * SEQ_LEN_MULT;
 
 	#pragma omp parallel for reduction(+:aux_vD) num_threads(n_procs)
 	for (i=0; i< *vect_sequences_db_count; i++ )
