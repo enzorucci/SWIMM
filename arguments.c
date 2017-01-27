@@ -121,7 +121,7 @@ static int parse_opt (int key, char *arg, struct argp_state *state) {
 			break;
 		case 'v':
 			vector_length = atoi(arg);
-			if ((vector_length != 16) && (vector_length != 32))
+			if ((vector_length != CPU_SSE_INT8_VECTOR_LENGTH) && (vector_length != CPU_AVX2_INT8_VECTOR_LENGTH))
 				argp_failure (state, 1, 0, "%d is not a valid option for vector length.",vector_length);
 			break;
 		case 'r':
@@ -136,6 +136,7 @@ static int parse_opt (int key, char *arg, struct argp_state *state) {
 			break;
 		case 'b':
 			cpu_block_size = atoi(arg);
+			cpu_block_size = ((cpu_block_size % SEQ_LEN_MULT != 0) ? (cpu_block_size/SEQ_LEN_MULT)*SEQ_LEN_MULT : cpu_block_size);
 			if (cpu_block_size < 0)
 				argp_failure (state, 1, 0, "The Xeon block size must be greater than 0.");
 			break;

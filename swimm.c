@@ -2,7 +2,7 @@
 
 // Global options
 char *sequences_filename=NULL, * queries_filename=NULL, *input_filename=NULL, * output_filename=NULL, *op=NULL, * submat=blosum62, submat_name[]="BLOSUM62", profile=0;
-int vector_length=VECTOR_LENGTH, execution_mode=HETEROGENEOUS, cpu_threads=CPU_THREADS, num_mics=NUM_MICS, mic_threads=MIC_THREADS, cpu_block_size=CPU_BLOCK_SIZE, open_gap=OPEN_GAP, extend_gap=EXTEND_GAP;
+int vector_length=CPU_SSE_INT8_VECTOR_LENGTH, execution_mode=HETEROGENEOUS, cpu_threads=CPU_THREADS, num_mics=NUM_MICS, mic_threads=MIC_THREADS, cpu_block_size=0, open_gap=OPEN_GAP, extend_gap=EXTEND_GAP;
 unsigned short int query_length_threshold = QUERY_LENGTH_THRESHOLD;
 unsigned long int max_chunk_size=MAX_CHUNK_SIZE, top=TOP;
 
@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
 	unsigned long int i, j, sequences_count, D, vect_sequences_db_count, vD, * chunk_vD, * vect_sequences_db_disp, query_sequences_count, Q;
 	unsigned int chunk_count, * chunk_vect_sequences_db_count, ** chunk_vect_sequences_db_disp, * query_sequences_disp;
 	int max_title_length, *scores;
-	unsigned short int ** chunk_vect_sequences_db_lengths, * vect_sequences_db_lengths, sequences_db_max_length, * query_sequences_lengths, *m;
+	unsigned short int ** chunk_vect_sequences_db_lengths, * vect_sequences_db_lengths, * vect_sequences_db_blocks, sequences_db_max_length, * query_sequences_lengths, *m;
 	char ** chunk_vect_sequences_db, * vect_sequences_db, *query_sequences, ** query_headers, ** sequence_db_headers, ** tmp_sequence_db_headers;
     time_t current_time = time(NULL);
 	double workTime, tick;
@@ -28,13 +28,19 @@ int main(int argc, char *argv[]) {
 		printf("\nSWIMM v%s \n\n",VERSION);
 		printf("Database file:\t\t\t%s\n",sequences_filename);
 
+		// Set CPU block size (if corresponds)
+		if (cpu_block_size == 0) {
+			cpu_block_size = (vector_length == CPU_AVX2_INT8_VECTOR_LENGTH ? CPU_AVX2_BLOCK_SIZE : CPU_SSE_BLOCK_SIZE);
+			cpu_block_size = (cpu_block_size/SEQ_LEN_MULT)*SEQ_LEN_MULT;
+		}
+		
 		// Load query sequence from file in a
 		load_query_sequences(queries_filename,execution_mode,&query_sequences,&query_headers,&query_sequences_lengths,&m,&query_sequences_count,&Q,&query_sequences_disp,cpu_threads);
 
 		// Assemble database (single chunk for CPU, multiple chunks for MIC and Heterogeneous)
 		if (execution_mode == CPU_ONLY) {
 			assemble_single_chunk_db (sequences_filename, vector_length, &sequences_count, &D, &sequences_db_max_length, &max_title_length, &vect_sequences_db_count, &vD, 
-				&vect_sequences_db,	&vect_sequences_db_lengths, &vect_sequences_db_disp, cpu_threads);
+				&vect_sequences_db,	&vect_sequences_db_lengths,	&vect_sequences_db_blocks, &vect_sequences_db_disp, cpu_threads, cpu_block_size);
 		}
 		else 
 			assemble_multiple_chunks_db (sequences_filename, vector_length, max_chunk_size, &sequences_count, &D, &sequences_db_max_length, &max_title_length,
@@ -61,12 +67,12 @@ int main(int argc, char *argv[]) {
 			if (vector_length == CPU_SSE_INT8_VECTOR_LENGTH)
 				// CPU search using SSE instrucions and Score Profile technique
 				cpu_search_sse_sp (query_sequences, m, query_sequences_count, query_sequences_disp, vect_sequences_db,
-					vect_sequences_db_lengths, vect_sequences_db_count, vect_sequences_db_disp, submat, open_gap, extend_gap, cpu_threads, cpu_block_size, scores,
+					vect_sequences_db_lengths, vect_sequences_db_blocks, vect_sequences_db_count, vect_sequences_db_disp, submat, open_gap, extend_gap, cpu_threads, cpu_block_size, scores,
 					&workTime);
 			else
 				// CPU search using AVX2 instrucions and Score Profile technique
 				cpu_search_avx2_sp (query_sequences, m, query_sequences_count, query_sequences_disp, vect_sequences_db,
-					vect_sequences_db_lengths, vect_sequences_db_count, vect_sequences_db_disp, submat, open_gap, extend_gap, cpu_threads, cpu_block_size, scores,
+					vect_sequences_db_lengths, vect_sequences_db_blocks, vect_sequences_db_count, vect_sequences_db_disp, submat, open_gap, extend_gap, cpu_threads, cpu_block_size, scores,
 					&workTime);
 		} else {
 			// MIC search
@@ -120,6 +126,7 @@ int main(int argc, char *argv[]) {
 		if (execution_mode == CPU_ONLY){
 			_mm_free(vect_sequences_db);
 			_mm_free(vect_sequences_db_lengths);
+			_mm_free(vect_sequences_db_blocks);
 			_mm_free(vect_sequences_db_disp);
 		} else {
 			_mm_free(chunk_vect_sequences_db[0]);

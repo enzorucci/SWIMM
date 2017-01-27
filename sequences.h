@@ -16,14 +16,16 @@
 
 #define DUMMY_ELEMENT 'Z'+1
 #define PREPROCESSED_DUMMY_ELEMENT 24
+#define SEQ_LEN_MULT 5
 
 // DB preprocessing
 void preprocess_db (char * input_filename, char * out_filename, int n_procs);
 
 // DB assembly for CPU
 void assemble_single_chunk_db (char * sequences_filename, int vector_length, unsigned long int * sequences_count,
-				unsigned long int * D, unsigned short int * sequences_db_max_length, int * max_title_length, unsigned long int * vect_sequences_db_count, unsigned long int * vD, char **ptr_vect_sequences_db,
-				unsigned short int ** ptr_vect_sequences_db_lengths, unsigned long int ** ptr_vect_sequences_db_disp, int n_procs);
+				unsigned long int * D, unsigned short int * sequences_db_max_length, int * max_title_length, unsigned long int * vect_sequences_db_count, 
+				unsigned long int * vD, char **ptr_vect_sequences_db, unsigned short int ** ptr_vect_sequences_db_lengths, unsigned short int ** ptr_vect_sequences_db_blocks, 
+				unsigned long int ** ptr_vect_sequences_db_disp, int n_procs, int block_size);
 
 // DB assembly for MIC or HET
 void assemble_multiple_chunks_db (char * sequences_filename, int vector_length, unsigned long int max_chunk_size, unsigned long int * sequences_count,

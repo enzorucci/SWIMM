@@ -486,6 +486,10 @@ void assemble_multiple_chunks_db (char * sequences_filename, int vector_length, 
 		vect_sequences_lengths[i] = sequences_lengths[(i+1)*vector_length-1];
 	vect_sequences_lengths[*vect_sequences_count-1] = sequences_lengths[*sequences_count-1];
 
+	// make length multiple of SEQ_LEN_MULT to allow manual loop unrolling
+	for (i=0; i< *vect_sequences_count; i++ ) 
+		vect_sequences_lengths[i] = ceil( (double) vect_sequences_lengths[i] / (double) SEQ_LEN_MULT) * SEQ_LEN_MULT;
+
 	// Calculate displacement for current sequences db 
 	vect_sequences_disp[0] = 0;
 	for (k=1; k < *vect_sequences_count+1; k++) 
@@ -613,11 +617,11 @@ void assemble_multiple_chunks_db (char * sequences_filename, int vector_length, 
 
 void assemble_single_chunk_db (char * sequences_filename, int vector_length, unsigned long int * sequences_count,
 				unsigned long int * D, unsigned short int * sequences_db_max_length, int * max_title_length, unsigned long int * vect_sequences_db_count,
-				unsigned long int * vD, char **ptr_vect_sequences_db, unsigned short int ** ptr_vect_sequences_db_lengths, 
-				unsigned long int ** ptr_vect_sequences_db_disp, int n_procs) {
+				unsigned long int * vD, char **ptr_vect_sequences_db, unsigned short int ** ptr_vect_sequences_db_lengths, unsigned short int ** ptr_vect_sequences_db_blocks, 
+				unsigned long int ** ptr_vect_sequences_db_disp, int n_procs, int block_size) {
 
 	char ** sequences, *s, filename[200], ** sequences_db_headers, *header, *b;
-	unsigned short int * vect_sequences_lengths, * sequences_lengths;
+	unsigned short int * vect_sequences_lengths, * vect_sequences_blocks, * sequences_lengths;
 	unsigned long int i, j, k, accum, aux_vD=0, *vect_sequences_disp;
 	FILE * sequences_file, * info_file;
 
@@ -665,6 +669,8 @@ void assemble_single_chunk_db (char * sequences_filename, int vector_length, uns
 	// Allocate memory for vect_sequences_lengths
 	vect_sequences_lengths = (unsigned short int *) _mm_malloc((*vect_sequences_db_count)*sizeof(unsigned short int),32);
 	if (vect_sequences_lengths == NULL) { printf("SWIMM: An error occurred while allocating memory.\n"); exit(1); }
+	vect_sequences_blocks = (unsigned short int *) _mm_malloc((*vect_sequences_db_count)*sizeof(unsigned short int),32);
+	if (vect_sequences_blocks == NULL) { printf("SWIMM: An error occurred while allocating memory.\n"); exit(1); }
 	vect_sequences_disp = (unsigned long int *) _mm_malloc((*vect_sequences_db_count+1)*sizeof(unsigned long int),32);
 	if (vect_sequences_disp == NULL) { printf("SWIMM: An error occurred while allocating memory.\n"); exit(1); }
 
@@ -672,6 +678,14 @@ void assemble_single_chunk_db (char * sequences_filename, int vector_length, uns
 	for (i=0; i< *vect_sequences_db_count - 1; i++ ) 
 		vect_sequences_lengths[i] = sequences_lengths[(i+1)*vector_length-1];
 	vect_sequences_lengths[*vect_sequences_db_count-1] = sequences_lengths[*sequences_count-1];
+
+	// make length multiple of SEQ_LEN_MULT to allow manual loop unrolling
+	for (i=0; i< *vect_sequences_db_count; i++ ) 
+		vect_sequences_lengths[i] = ceil( (double) vect_sequences_lengths[i] / (double) SEQ_LEN_MULT) * SEQ_LEN_MULT;
+
+	// calculate number of blocks
+	for (i=0; i< *vect_sequences_db_count; i++ ) 
+		vect_sequences_blocks[i] = ceil((double) vect_sequences_lengths[i] / block_size);
 
 	#pragma omp parallel for reduction(+:aux_vD) num_threads(n_procs)
 	for (i=0; i< *vect_sequences_db_count; i++ )
@@ -710,6 +724,7 @@ void assemble_single_chunk_db (char * sequences_filename, int vector_length, uns
 
 	*ptr_vect_sequences_db = b;
 	*ptr_vect_sequences_db_lengths = vect_sequences_lengths;
+	*ptr_vect_sequences_db_blocks = vect_sequences_blocks;
 	*ptr_vect_sequences_db_disp = vect_sequences_disp;
 	*sequences_db_max_length = sequences_lengths[*sequences_count-1];
 
