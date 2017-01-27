@@ -2,7 +2,7 @@
 Smith-Waterman implementation for Intel Multicore and Manycore architectures
 
 ## Description
-SWIMM is a software to accelerate Smith-Waterman protein database search on Intel heterogeneous architectures based on Xeon and Xeon Phi processors. SWIMM takes advantage of SIMD computing through the use of SSE and AVX2 extensions on the Xeon and the KNC instruction set on the Xeon Phi. In addition, it offers three execution modes: (1) Xeon, (2) Xeon Phi and (3) concurrent Xeon and Xeon Phi. On a heterogeneous platform based on two Xeon E5-2695 v3 and a single Xeon Phi 3120P, SWIMM reaches up to 380 GCUPS on heterogeneous mode (AVX2+KNC), 350 GCUPS for the isolated Xeon (AVX2) and 50 GCUPS on Xeon Phi (KNC), while searching Environmental NR database.
+SWIMM is a software to accelerate Smith-Waterman protein database search on Intel heterogeneous architectures based on Xeon and Xeon Phi processors. SWIMM takes advantage of SIMD computing through the use of SSE and AVX2 extensions on the Xeon and the KNC instruction set on the Xeon Phi. In addition, it offers three execution modes: (1) Xeon, (2) Xeon Phi and (3) concurrent Xeon and Xeon Phi. On a heterogeneous platform based on two Xeon E5-2695 v3 and a single Xeon Phi 3120P, SWIMM reaches up to 380 GCUPS on heterogeneous mode (AVX2+KNC), 350 GCUPS for the isolated Xeon (AVX2) and 50 GCUPS on Xeon Phi (KNC), while searching Environmental NR database (compiled with ICC v14.0.2.144).
 
 ## Usage
 Databases must be preprocessed before searching it.
