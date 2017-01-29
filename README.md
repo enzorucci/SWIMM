@@ -139,7 +139,7 @@ Enzo Rucci, Armando De Giusti, Marcelo Naiouf, Carlos García, Guillermo Botella
 
 ## Changelog
 * January 27, 2017 (v1.1.3)
-Reduced number of division operations.
+Removed unnecesary operations.
 * April 06, 2016 (v1.1.1)
 Reduced score profile memory consumption. Improved concurrency when using two or more query sequences. Bug fix for block size setting.
 * March 27, 2016 (v1.1.0)
